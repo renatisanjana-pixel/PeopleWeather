@@ -128,8 +128,8 @@ def generate_data():
         n, p=[0.10, 0.68, 0.22]
     )
     employees["talent"] = rng.choice(
-        ["Core Talent", "High Potential", "Top Talent"],
-        n, p=[0.72, 0.18, 0.10]
+        ["Other Talent", "High Potential Talent", "Top Talent"],
+        n, p=[0.70, 0.20, 0.10]
     )
 
     genders = np.array(["Male"] * 329 + ["Female"] * 279 + ["Others"] * 12)
@@ -243,7 +243,7 @@ def generate_data():
         base_skip = rng.normal(62, 9)
         base_coach = rng.normal(65, 9)
         base_learn_score = rng.normal(71, 7)
-        base_flight = rng.normal(28, 8)
+        base_flight = rng.normal(4.5, 1.8)
 
         for mi, month in enumerate(months):
             if emp["employee_id"] not in active_sets[month]:
@@ -263,7 +263,47 @@ def generate_data():
             innovation = base_innovation + rng.normal(0, 3)
             work = rng.normal(67, 7)
 
-            team_pulse = base_pulse + rng.normal(0, 3)
+            # Gentle month-on-month movement (roughly 1–7 points) and
+            # more visible quarter-on-quarter theme rotation.
+            monthly_wave = [0, 1, -1, 2, -2, 3, -1, 4, -3, 2, 1, -2, 3, -1, 2, -3, 4, -2, 1, 3, -1]
+            wave = monthly_wave[mi % len(monthly_wave)]
+
+            sat += wave * 0.7
+            manager_theme += wave * 0.6
+            team += wave * 0.5
+            wellbeing += wave * 0.8
+            culture += wave * 0.5
+            org_listening += wave * 0.6
+            learning_theme += wave * 0.7
+            inclusivity += wave * 0.4
+            innovation += wave * 0.9
+            work += wave * 0.7
+
+            # Different listening themes lead in different quarters.
+            quarter_index = mi // 3
+            quarter_pattern = quarter_index % 4
+            if quarter_pattern == 0:
+                manager_theme += 4
+                team += 3
+                wellbeing -= 2
+                innovation -= 1
+            elif quarter_pattern == 1:
+                work += 4
+                learning_theme += 3
+                manager_theme -= 2
+                culture += 1
+            elif quarter_pattern == 2:
+                wellbeing += 5
+                inclusivity += 3
+                work -= 2
+                org_listening += 1
+            else:
+                innovation += 5
+                culture += 3
+                learning_theme += 2
+                wellbeing -= 2
+
+            team_pulse = base_pulse + np.clip(wave, -3, 4) + rng.normal(0, 2.5)
             one_to_one = base_11 + rng.normal(0, 3)
             skip = base_skip + rng.normal(0, 3)
             coaching = base_coach + rng.normal(0, 3)
@@ -277,14 +317,14 @@ def generate_data():
                 work -= 7 + 0.7 * months_under_pressure
                 wellbeing -= 6
                 team_pulse -= 5
-                flight += 9 + 0.8 * months_under_pressure
+                flight += 2.0 + 0.20 * months_under_pressure
 
             # Rafee deteriorates in manager cadence.
             if mgr == "Rafee" and month >= pd.Timestamp("2026-03-01"):
                 one_to_one -= 12
                 manager_theme -= 9
                 team_pulse -= 6
-                flight += 8
+                flight += 1.8
 
             # Priya improves from Jul 2026 after coaching intervention.
             if mgr == "Priya" and month >= pd.Timestamp("2026-07-01"):
@@ -295,18 +335,18 @@ def generate_data():
 
             # Career risk pocket.
             if emp["performance"] == "Exceptional" and emp["tenure"] == "2–4 years":
-                flight += 10
+                flight += 2.2
                 learning_theme -= 5
 
             if emp["talent"] == "Top Talent":
-                flight += 6
+                flight += 1.5
 
             # Participation.
-            participation_prob = 0.84
+            participation_prob = 0.45
             if mgr == "Rafee" and month >= pd.Timestamp("2026-04-01"):
-                participation_prob = 0.72
+                participation_prob = 0.36
             if mgr == "Priya" and month >= pd.Timestamp("2026-07-01"):
-                participation_prob = 0.91
+                participation_prob = 0.56
 
             survey_participated = rng.random() < participation_prob
 
@@ -347,7 +387,7 @@ def generate_data():
 
             # Monthly internal move event.
             move_prob = 0.018
-            if emp["talent"] in ["High Potential", "Top Talent"]:
+            if emp["talent"] in ["High Potential Talent", "Top Talent"]:
                 move_prob += 0.014
             internal_move_flag = rng.random() < move_prob
 
@@ -724,6 +764,7 @@ with tabs[0]:
 
     move_rate = internal_moves / max(avg_hc, 1) * 100
     pipeline_rate = exit_pipeline / max(avg_hc, 1) * 100
+    pulse_participation = participation(filtered)
 
     if move_rate >= 8:
         positive_points.append(
@@ -751,6 +792,11 @@ with tabs[0]:
             "Joiner volume is relatively low for the selected multi-month period."
         )
 
+    if pulse_participation < 55:
+        watch_points.append(
+            f"Pulse participation is only {pulse_participation:.0f}%, which weakens confidence in listening insights."
+        )
+
     if not positive_points:
         positive_points.append("Workforce movement is broadly stable in the selected cut.")
     if not watch_points:
@@ -766,7 +812,7 @@ with tabs[0]:
     st.markdown(
         '<div class="ai-watch"><b>Watch-out</b><br>' +
         "<br>".join([f"• {x}" for x in watch_points]) +
-        "<br><br><b>Suggested action:</b> review vacancies, exit pipeline and workforce movement together before the next business review.</div>",
+        "<br><br><b>Suggested action:</b> use manager nudges, short reminders, leadership call-outs and protected survey time to lift Pulse participation, while reviewing vacancies and exit pipeline in parallel.</div>",
         unsafe_allow_html=True
     )
 
@@ -813,7 +859,7 @@ with tabs[1]:
         ticksuffix="%",
         title="Attrition"
     )
-    fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+    fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=25))
     st.plotly_chart(fig, use_container_width=True)
 
     # Selected period attrition = exits / average monthly headcount.
@@ -896,7 +942,7 @@ with tabs[1]:
                 dtick=5,
                 ticksuffix="%"
             )
-            fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+            fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=25))
             st.plotly_chart(fig, use_container_width=True)
 
     with right:
@@ -921,7 +967,8 @@ with tabs[1]:
             )
             fig.update_layout(
                 showlegend=False,
-                margin=dict(l=15, r=15, t=55, b=15)
+                height=280,
+                margin=dict(l=15, r=15, t=50, b=10)
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
@@ -969,7 +1016,7 @@ with tabs[1]:
             )
             fig.update_yaxes(title=None)
             fig.update_layout(
-                height=max(320, 48 * len(voluntary)),
+                height=max(240, 38 * len(voluntary)),
                 margin=dict(l=10, r=35, t=15, b=35)
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -994,7 +1041,7 @@ with tabs[1]:
             )
             fig.update_yaxes(title=None)
             fig.update_layout(
-                height=max(320, 48 * len(involuntary)),
+                height=max(240, 38 * len(involuntary)),
                 margin=dict(l=10, r=35, t=15, b=35)
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -1116,7 +1163,7 @@ with tabs[3]:
     ].copy()
 
     top_talent = latest[latest["talent"] == "Top Talent"]["employee_id"].nunique()
-    high_risk = latest[latest["flight_risk"] >= 45]["employee_id"].nunique()
+    high_risk = latest[latest["flight_risk"] >= 8]["employee_id"].nunique()
 
     critical_roles = latest[latest["job_level"].isin(["L3", "L4"])]
     covered = critical_roles[
@@ -1264,7 +1311,7 @@ with tabs[4]:
         dtick=10,
         ticksuffix="%"
     )
-    fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+    fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=25))
     st.plotly_chart(fig, use_container_width=True)
 
     if len(plot_df):
