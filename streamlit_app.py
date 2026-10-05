@@ -1,487 +1,366 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
-st.set_page_config(page_title="People Pulse | Customer Success", page_icon="🟣", layout="wide")
+st.set_page_config(page_title='People Pulse | Customer Success', page_icon='🟣', layout='wide')
+
 MIN_RESPONDENTS = 5
 
-st.markdown("""
+st.markdown('''
 <style>
-.block-container {padding-top: 1.2rem; padding-bottom: 3rem;}
-[data-testid="stMetric"] {background-color:#fff;border:1px solid #e9e9ef;padding:14px 16px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
-.pp-header {padding:24px 28px;border-radius:20px;background:linear-gradient(120deg,#4C1D95,#7C3AED,#A855F7);color:white;margin-bottom:14px;}
-.pp-header h1 {margin:0;font-size:36px;letter-spacing:.2px;}
-.pp-header p {margin:7px 0 0 0;opacity:.94;font-size:16px;line-height:1.5;}
-.privacy-badge {display:inline-block;background:#F3E8FF;color:#6B21A8;border-radius:20px;padding:7px 12px;font-weight:600;font-size:13px;margin-bottom:8px;}
-.benchmark-box {padding:12px 16px;background:#FAFAFC;border:1px solid #ECECF2;border-radius:12px;font-size:13px;margin:6px 0 16px 0;}
-.ai-box {padding:18px 20px;border-left:5px solid #7C3AED;background-color:#F8F5FF;border-radius:12px;margin-top:10px;margin-bottom:15px;}
-.alert-box {padding:16px 18px;background-color:#FFF7ED;border-left:5px solid #F97316;border-radius:12px;margin-bottom:12px;}
-.good-box {padding:16px 18px;background-color:#F0FDF4;border-left:5px solid #22C55E;border-radius:12px;margin-bottom:12px;}
-.small-note {color:#6B7280;font-size:12px;}
+.block-container {padding-top: 1.1rem; padding-bottom: 3rem;}
+[data-testid="stMetric"]{background:#fff;border:1px solid #ececf2;padding:12px 14px;border-radius:14px;}
+[data-testid="stMetricLabel"]{font-size:.86rem;}
+[data-testid="stMetricValue"]{font-size:1.95rem;}
+.pp-header{padding:22px 26px;border-radius:18px;background:linear-gradient(120deg,#4C1D95,#7C3AED,#A855F7);color:white;margin-bottom:12px;}
+.pp-header h1{margin:0;font-size:34px;}
+.pp-header p{margin:7px 0 0;opacity:.94;line-height:1.45;}
+.privacy{display:inline-block;padding:7px 12px;border-radius:18px;background:#F3E8FF;color:#6B21A8;font-weight:600;font-size:13px;margin-bottom:8px;}
+.ai-good{padding:16px 18px;background:#F0FDF4;border-left:5px solid #22C55E;border-radius:12px;margin:8px 0;}
+.ai-watch{padding:16px 18px;background:#FFF7ED;border-left:5px solid #F97316;border-radius:12px;margin:8px 0;}
 </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 @st.cache_data
-def create_data():
+def generate_data():
     np.random.seed(42)
     n = 500
-    division_counts = {
-        "Enterprise Customer Success": 145,
-        "Mid-Market Customer Success": 115,
-        "SMB Customer Success": 90,
-        "Customer Support": 85,
-        "Customer Success Operations": 65,
-    }
-    divisions = []
-    for division, count in division_counts.items():
-        divisions.extend([division] * count)
+    employees = pd.DataFrame({'employee_id':[f'E{i:03d}' for i in range(1,n+1)]})
+
+    divisions = ['Enterprise CS']*145 + ['Mid-Market CS']*115 + ['SMB CS']*90 + ['Customer Support']*85 + ['CS Operations']*65
     np.random.shuffle(divisions)
+    employees['division'] = divisions
+    employees['city'] = np.random.choice(['Bengaluru','Mumbai','Delhi NCR','Hyderabad','Pune'], n, p=[.42,.18,.15,.15,.10])
+    employees['job_level'] = np.random.choice(['L1','L2','L3','L4'], n, p=[.25,.35,.25,.15])
+    employees['tenure'] = np.random.choice(['<1 year','1–2 years','2–4 years','4+ years'], n, p=[.16,.24,.35,.25])
+    employees['performance'] = np.random.choice(['Developing','Strong','Exceptional'], n, p=[.10,.68,.22])
+    employees['talent'] = np.random.choice(['Core Talent','High Potential','Top Talent'], n, p=[.72,.18,.10])
 
-    cities = np.random.choice(["Bengaluru", "Mumbai", "Delhi NCR", "Hyderabad", "Pune"], n, p=[0.42,0.18,0.15,0.15,0.10])
-    levels = np.random.choice(["L1","L2","L3","L4","L5","L6"], n, p=[0.12,0.25,0.27,0.20,0.11,0.05])
-    tenure = np.random.choice(["<1 year","1–2 years","2–4 years","4–7 years","7+ years"], n, p=[0.15,0.22,0.32,0.23,0.08])
-    performance = np.random.choice(["Developing","Strong","Exceptional"], n, p=[0.10,0.68,0.22])
-    talent = np.random.choice(["Core Talent","High Potential","Critical Talent"], n, p=[0.72,0.18,0.10])
-
-    genders = np.array(["Male"]*265 + ["Female"]*225 + ["Others"]*10)
+    genders = np.array(['Male']*265 + ['Female']*225 + ['Others']*10)
     np.random.shuffle(genders)
+    employees['gender'] = genders
 
-    manager_names = ["Anuj","Beena","Cassie","Farah","Priya","Tina","Ronit","Yusuf","Rafee","Zainab"]
-    managers = np.repeat(manager_names, 50)
-    np.random.shuffle(managers)
+    managers = ['Anuj','Cassie','Rafee','Priya','Zainab']
+    manager_values = np.repeat(managers, 100)
+    np.random.shuffle(manager_values)
+    employees['manager'] = manager_values
 
-    employee_base = pd.DataFrame({
-        "employee_id":[f"E{i:03d}" for i in range(1,n+1)],
-        "division":divisions,
-        "city":cities,
-        "job_level":levels,
-        "tenure":tenure,
-        "performance":performance,
-        "talent":talent,
-        "gender":genders,
-        "manager":managers,
-    })
-    employee_base["manager_rank"] = employee_base.groupby("manager").cumcount()+1
+    months = pd.date_range('2025-10-01', periods=12, freq='MS')
+    employees['join_month'] = np.random.choice(months, n)
+    employees['exit_pipeline_flag'] = np.random.rand(n) < 0.055
+    employees['internal_move_flag'] = np.random.rand(n) < 0.12
+    employees['movement_type'] = np.where(
+        employees['internal_move_flag'],
+        np.random.choice(['IJP','Onsite Rotation','Role Expansion'], n, p=[.55,.25,.20]),
+        'None'
+    )
 
-    months = pd.date_range("2025-10-01", periods=12, freq="MS")
-    records=[]
+    voluntary_reasons = [
+        'Better salary','Taking time off for personal/medical reasons','Onsite opportunity',
+        'Better benefits package','Pursuing passion outside of corporate','Long Work Hours','Culture Mismatch'
+    ]
+    involuntary_types = [
+        'Dismissal','Poor performance','Layoff / Retrenchment','Redundancy / Restructuring',
+        'End of contract','Probation failure','Medical / Capability separation'
+    ]
 
-    division_effects = {
-        "Enterprise Customer Success":{"pulse":-5,"manager":-2,"workload":8,"career":-4,"risk":6},
-        "Mid-Market Customer Success":{"pulse":1,"manager":1,"workload":1,"career":0,"risk":0},
-        "SMB Customer Success":{"pulse":5,"manager":4,"workload":-5,"career":3,"risk":-4},
-        "Customer Support":{"pulse":3,"manager":2,"workload":0,"career":2,"risk":-2},
-        "Customer Success Operations":{"pulse":-2,"manager":-1,"workload":3,"career":-3,"risk":3},
-    }
-    manager_effects = {
-        "Anuj":{"pulse":5,"manager":6,"workload":-4,"risk":-4},
-        "Beena":{"pulse":3,"manager":4,"workload":-2,"risk":-2},
-        "Cassie":{"pulse":1,"manager":2,"workload":0,"risk":0},
-        "Farah":{"pulse":-2,"manager":-2,"workload":4,"risk":3},
-        "Priya":{"pulse":4,"manager":5,"workload":-3,"risk":-3},
-        "Tina":{"pulse":0,"manager":0,"workload":1,"risk":1},
-        "Ronit":{"pulse":-4,"manager":-5,"workload":7,"risk":6},
-        "Yusuf":{"pulse":2,"manager":3,"workload":-1,"risk":-1},
-        "Rafee":{"pulse":-1,"manager":-1,"workload":3,"risk":2},
-        "Zainab":{"pulse":1,"manager":1,"workload":0,"risk":0},
-    }
+    rows = []
+    for _, emp in employees.iterrows():
+        base_sat = np.random.normal(74,7)
+        base_manager = np.random.normal(76,7)
+        base_team = np.random.normal(78,7)
+        base_wellbeing = np.random.normal(70,8)
+        base_learning = np.random.normal(72,7)
+        base_innovation = np.random.normal(68,8)
+        base_inclusivity = np.random.normal(77,6)
+        base_pulse = np.random.normal(74,6)
+        base_11 = np.random.normal(82,8)
+        base_skip = np.random.normal(62,9)
+        base_coach = np.random.normal(65,9)
+        base_learn_score = np.random.normal(71,7)
+        base_flight = np.random.normal(28,8)
 
-    for _, person in employee_base.iterrows():
-        base_pulse=np.random.normal(74,6)
-        base_manager=np.random.normal(75,6)
-        base_workload=np.random.normal(46,7)
-        base_one_to_one=np.random.normal(82,7)
-        base_career=np.random.normal(72,7)
-        base_risk=np.random.normal(28,7)
+        for mi, month in enumerate(months):
+            div = emp['division']
+            mgr = emp['manager']
+            sat = base_sat + np.random.normal(0,3)
+            manager_theme = base_manager + np.random.normal(0,3)
+            team = base_team + np.random.normal(0,3)
+            wellbeing = base_wellbeing + np.random.normal(0,3)
+            culture = np.random.normal(73,6)
+            org_listening = np.random.normal(70,7)
+            learning_theme = base_learning + np.random.normal(0,3)
+            inclusivity = base_inclusivity + np.random.normal(0,3)
+            innovation = base_innovation + np.random.normal(0,3)
+            work = np.random.normal(67,7)
+            team_pulse = base_pulse + np.random.normal(0,3)
+            one_to_one = base_11 + np.random.normal(0,3)
+            skip = base_skip + np.random.normal(0,3)
+            coaching = base_coach + np.random.normal(0,3)
+            learning_score = base_learn_score + np.random.normal(0,3)
+            flight = base_flight + np.random.normal(0,3)
 
-        for month_num, month in enumerate(months):
-            de=division_effects[person["division"]]
-            me=manager_effects[person["manager"]]
-            pulse=base_pulse+de["pulse"]+me["pulse"]+np.random.normal(0,3)
-            manager_connection=base_manager+de["manager"]+me["manager"]+np.random.normal(0,3)
-            workload=base_workload+de["workload"]+me["workload"]+np.random.normal(0,3)
-            one_to_one=base_one_to_one+np.random.normal(0,3)
-            career=base_career+de["career"]+np.random.normal(0,3)
-            risk=base_risk+de["risk"]+me["risk"]+np.random.normal(0,3)
+            if div == 'Enterprise CS' and mi >= 7:
+                sat -= 7; work -= 9; wellbeing -= 8; team_pulse -= 6; flight += 12
+            if mgr == 'Rafee' and mi >= 6:
+                one_to_one -= 12; manager_theme -= 9; team_pulse -= 6; flight += 8
+            if mgr == 'Priya' and mi >= 8:
+                one_to_one += 8; coaching += 10; team_pulse += 5; manager_theme += 6
+            if emp['performance'] == 'Exceptional' and emp['tenure'] == '2–4 years':
+                flight += 10; learning_theme -= 5
+            if emp['talent'] == 'Top Talent':
+                flight += 6
 
-            if person["division"]=="Enterprise Customer Success" and month_num>=7:
-                workload += 7+(month_num-7)*2.0
-                pulse -= 4+(month_num-7)*0.8
-                manager_connection -= 2
-                risk += 6+(month_num-7)*1.4
+            participation_prob = .84
+            if mgr == 'Rafee' and mi >= 7: participation_prob = .72
+            if mgr == 'Priya' and mi >= 8: participation_prob = .91
+            survey_participated = np.random.rand() < participation_prob
 
-            if person["manager"]=="Ronit" and month_num>=6:
-                one_to_one -= 11
-                manager_connection -= 7
-                pulse -= 5
-                risk += 8
+            attrition_prob = .005
+            if div == 'Enterprise CS' and mi >= 8: attrition_prob += .012
+            if mgr == 'Rafee' and mi >= 7: attrition_prob += .008
+            if emp['talent'] == 'Top Talent': attrition_prob += .003
 
-            if person["manager"]=="Farah" and month_num>=8:
-                one_to_one += 8
-                manager_connection += 6
-                pulse += 5
-                workload -= 4
-                risk -= 4
+            exit_event = np.random.rand() < attrition_prob
+            exit_type = ''
+            exit_reason = ''
+            if exit_event:
+                if np.random.rand() < .72:
+                    exit_type = 'Voluntary'
+                    exit_reason = np.random.choice(voluntary_reasons, p=[.27,.14,.12,.12,.10,.15,.10])
+                else:
+                    exit_type = 'Involuntary'
+                    exit_reason = np.random.choice(involuntary_types, p=[.10,.28,.16,.18,.10,.12,.06])
 
-            if person["tenure"]=="2–4 years" and person["performance"]=="Exceptional":
-                career -= 9
-                risk += 10
-                pulse -= 3
-
-            if person["talent"]=="Critical Talent":
-                career -= 5
-                risk += 7
-            elif person["talent"]=="High Potential":
-                career -= 2
-                risk += 3
-
-            if manager_connection<65:
-                pulse -= 6
-                risk += 5
-
-            customer_connectedness=np.random.normal(83,6) if person["division"] in ["Enterprise Customer Success","Customer Support"] else np.random.normal(73,7)
-
-            if person["manager"]=="Zainab":
-                survey_participated = person["manager_rank"]<=4
+            if emp['job_level'] in ['L3','L4']:
+                successor_coverage = np.random.choice(['Ready now','Ready <12m','No successor'], p=[.36,.34,.30])
             else:
-                participation_prob=0.84
-                if person["manager"]=="Ronit" and month_num>=7:
-                    participation_prob=0.70
-                if person["manager"]=="Farah" and month_num>=8:
-                    participation_prob=0.90
-                survey_participated=np.random.random()<participation_prob
+                successor_coverage = 'N/A'
 
-            records.append({
-                "employee_id":person["employee_id"],
-                "month":month,
-                "division":person["division"],
-                "city":person["city"],
-                "job_level":person["job_level"],
-                "tenure":person["tenure"],
-                "performance":person["performance"],
-                "talent":person["talent"],
-                "gender":person["gender"],
-                "manager":person["manager"],
-                "survey_participated":bool(survey_participated),
-                "pulse":np.clip(pulse,0,100),
-                "manager_connection":np.clip(manager_connection,0,100),
-                "workload_pressure":np.clip(workload,0,100),
-                "one_to_one_completion":np.clip(one_to_one,0,100),
-                "career_sentiment":np.clip(career,0,100),
-                "flight_risk_signal":np.clip(risk,0,100),
-                "customer_connectedness":np.clip(customer_connectedness,0,100),
+            rows.append({
+                'employee_id':emp['employee_id'],'month':month,'division':div,'city':emp['city'],
+                'job_level':emp['job_level'],'tenure':emp['tenure'],'performance':emp['performance'],
+                'talent':emp['talent'],'gender':emp['gender'],'manager':mgr,'join_month':emp['join_month'],
+                'exit_pipeline_flag':emp['exit_pipeline_flag'],'internal_move_flag':emp['internal_move_flag'],
+                'movement_type':emp['movement_type'],'survey_participated':survey_participated,
+                'satisfaction':np.clip(sat,0,100),'theme_manager':np.clip(manager_theme,0,100),
+                'theme_work':np.clip(work,0,100),'theme_team':np.clip(team,0,100),
+                'theme_wellbeing':np.clip(wellbeing,0,100),'theme_culture':np.clip(culture,0,100),
+                'theme_org_listening':np.clip(org_listening,0,100),'theme_learning':np.clip(learning_theme,0,100),
+                'theme_inclusivity':np.clip(inclusivity,0,100),'theme_innovation':np.clip(innovation,0,100),
+                'flight_risk':np.clip(flight,0,100),'successor_coverage':successor_coverage,
+                'one_to_one':np.clip(one_to_one,0,100),'skip_level':np.clip(skip,0,100),
+                'coaching':np.clip(coaching,0,100),'team_pulse':np.clip(team_pulse,0,100),
+                'learning_score':np.clip(learning_score,0,100),'exit_event':int(exit_event),
+                'exit_type':exit_type,'exit_reason':exit_reason
             })
-    return pd.DataFrame(records)
 
-df=create_data()
+    panel = pd.DataFrame(rows)
 
-st.markdown("""
+    role_rows = []
+    role_base = {'Enterprise CS':14,'Mid-Market CS':10,'SMB CS':8,'Customer Support':12,'CS Operations':6}
+    for month in months:
+        for div, base in role_base.items():
+            value = base + (5 if div == 'Enterprise CS' and month >= pd.Timestamp('2026-05-01') else 0)
+            role_rows.append({'month':month,'division':div,'open_roles':max(0,int(np.random.normal(value,2)))})
+
+    return panel, pd.DataFrame(role_rows)
+
+df, open_roles_df = generate_data()
+
+def headcount(data): return data['employee_id'].nunique()
+def respondents(data): return data.loc[data['survey_participated'],'employee_id'].nunique()
+def participation(data):
+    hc = headcount(data)
+    return respondents(data)/hc*100 if hc else np.nan
+
+def survey_mean(data,col):
+    if respondents(data) < MIN_RESPONDENTS: return np.nan
+    return data.loc[data['survey_participated'],col].mean()
+
+def pct(v): return '🔒' if pd.isna(v) else f'{v:.0f}%'
+
+def percent_chart(fig,height=330):
+    fig.update_yaxes(range=[0,100],ticksuffix='%')
+    fig.update_layout(height=height,margin=dict(l=20,r=20,t=55,b=30))
+    return fig
+
+st.markdown('''
 <div class="pp-header">
 <h1>People Pulse</h1>
 <p>Customer Success • People Health & Organisational Insights<br>
-A forward-looking view of engagement, manager effectiveness, talent health and emerging people priorities.</p>
+A focused view of workforce health, employee voice, talent and manager effectiveness.</p>
 </div>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
-st.markdown('<div class="privacy-badge">🔒 Privacy protected • Minimum respondent group: 5 • Synthetic data</div>', unsafe_allow_html=True)
+st.markdown('<div class="privacy">🔒 Synthetic data • No individual records shown • Minimum survey group = 5</div>', unsafe_allow_html=True)
 
-st.markdown("""
-<div class="benchmark-box">
-<b>How to read the scores</b><br>
-<b>Positive indicators</b> (Pulse, Manager Connection, Career Sentiment, 1:1 Completion):
-🟢 ≥70% healthy &nbsp; | &nbsp; 🟠 50–69% watch &nbsp; | &nbsp; 🔴 &lt;50% concern<br>
-<b>Pressure indicators</b> (Workload Pressure, Flight Risk Signal):
-🟢 &lt;30% low &nbsp; | &nbsp; 🟠 30–49% watch &nbsp; | &nbsp; 🔴 ≥50% high<br>
-All survey-derived scores are percentages. Participation = respondents ÷ total population in the selected cut.
-</div>
-""", unsafe_allow_html=True)
+st.sidebar.title('Data cuts')
+st.sidebar.caption('Leave blank to include all values.')
+month_options = sorted(df['month'].unique())
+sel_months = st.sidebar.multiselect('Month', month_options, default=[month_options[-1]], format_func=lambda x: pd.Timestamp(x).strftime('%b %Y'))
 
-st.sidebar.title("Explore the organisation")
-st.sidebar.caption("All survey insights are aggregated. Groups with fewer than 5 respondents are suppressed.")
+def multi_filter(label,col):
+    return st.sidebar.multiselect(label, sorted(df[col].dropna().unique().tolist()), default=[])
 
-all_months=sorted(df["month"].unique())
-selected_months=st.sidebar.multiselect(
-    "Month(s)", options=all_months, default=[all_months[-1]],
-    format_func=lambda x: pd.Timestamp(x).strftime("%b %Y"),
-    help="Select one or multiple months to view an aggregate."
-)
-if not selected_months:
-    st.sidebar.warning("Select at least one month.")
+sel_division = multi_filter('Division','division')
+sel_city = multi_filter('City','city')
+sel_level = multi_filter('Job Level','job_level')
+sel_tenure = multi_filter('Tenure','tenure')
+sel_perf = multi_filter('Performance','performance')
+sel_talent = multi_filter('Talent','talent')
+sel_gender = multi_filter('Gender','gender')
+sel_manager = multi_filter('Manager','manager')
+
+if not sel_months:
+    st.sidebar.warning('Select at least one month.')
     st.stop()
-
-selected_df=df[df["month"].isin(selected_months)].copy()
-
-def add_filter(label,column):
-    values=["All"]+sorted(selected_df[column].dropna().unique().tolist())
-    return st.sidebar.selectbox(label,values)
-
-division_filter=add_filter("Division","division")
-city_filter=add_filter("City","city")
-level_filter=add_filter("Job Level","job_level")
-tenure_filter=add_filter("Tenure","tenure")
-performance_filter=add_filter("Performance","performance")
-talent_filter=add_filter("Talent Mapping","talent")
-gender_filter=add_filter("Gender","gender")
-manager_filter=add_filter("Manager","manager")
 
 def apply_filters(data):
-    filtered=data.copy()
-    filters={
-        "division":division_filter,"city":city_filter,"job_level":level_filter,
-        "tenure":tenure_filter,"performance":performance_filter,"talent":talent_filter,
-        "gender":gender_filter,"manager":manager_filter,
-    }
-    for col,value in filters.items():
-        if value!="All":
-            filtered=filtered[filtered[col]==value]
-    return filtered
+    f = data[data['month'].isin(sel_months)].copy()
+    mapping = {'division':sel_division,'city':sel_city,'job_level':sel_level,'tenure':sel_tenure,
+               'performance':sel_perf,'talent':sel_talent,'gender':sel_gender,'manager':sel_manager}
+    for col, values in mapping.items():
+        if values: f = f[f[col].isin(values)]
+    return f
 
-filtered_selected=apply_filters(selected_df)
-filtered_all=apply_filters(df)
-
-def unique_headcount(data):
-    return data["employee_id"].nunique()
-
-def respondent_count(data):
-    return data.loc[data["survey_participated"],"employee_id"].nunique()
-
-def participation_rate(data):
-    hc=unique_headcount(data)
-    return respondent_count(data)/hc*100 if hc else np.nan
-
-def survey_mean(data,col):
-    resp=data[data["survey_participated"]]
-    if resp["employee_id"].nunique()<MIN_RESPONDENTS:
-        return np.nan
-    return resp[col].mean()
-
-def pct_or_lock(value):
-    return "🔒 Suppressed" if pd.isna(value) else f"{value:.1f}%"
-
-group_size=unique_headcount(filtered_selected)
-respondents=respondent_count(filtered_selected)
-if group_size==0:
-    st.warning("No employees match the selected filters.")
+filtered = apply_filters(df)
+if filtered.empty:
+    st.warning('No employees match this combination of filters.')
     st.stop()
-if respondents<MIN_RESPONDENTS:
-    st.warning(f"🔒 Survey insights are suppressed because only {respondents} respondents match this cut. Minimum required: {MIN_RESPONDENTS}.")
-    st.caption(f"Population size: {group_size}. Participation can be shown, but no survey-derived scores will populate.")
 
-selected_sorted=sorted(pd.to_datetime(selected_months))
-if len(selected_sorted)==1:
-    comparison_months=[selected_sorted[0]-pd.DateOffset(months=1)]
-else:
-    comparison_months=list(pd.date_range(end=selected_sorted[0]-pd.DateOffset(months=1),periods=len(selected_sorted),freq="MS"))
-
-current=filtered_selected
-comparison=apply_filters(df[df["month"].isin(comparison_months)].copy())
-
-current_pulse=survey_mean(current,"pulse")
-current_workload=survey_mean(current,"workload_pressure")
-current_manager=survey_mean(current,"manager_connection")
-current_risk=survey_mean(current,"flight_risk_signal")
-current_one_to_one=survey_mean(current,"one_to_one_completion")
-current_career=survey_mean(current,"career_sentiment")
-current_participation=participation_rate(current)
-previous_pulse=survey_mean(comparison,"pulse")
-previous_workload=survey_mean(comparison,"workload_pressure")
-previous_manager=survey_mean(comparison,"manager_connection")
-previous_risk=survey_mean(comparison,"flight_risk_signal")
-
-def delta_text(current_value,previous_value):
-    if pd.isna(current_value) or pd.isna(previous_value):
-        return None
-    return f"{current_value-previous_value:+.1f} pts"
-
-def safe_groupby(data,group_col,order=None):
-    rows=[]
-    for group_value,g in data.groupby(group_col):
-        hc=unique_headcount(g)
-        resp=respondent_count(g)
-        row={group_col:group_value,"Headcount":hc,"Respondents":resp,"Participation":(resp/hc*100) if hc else np.nan}
-        if resp>=MIN_RESPONDENTS:
-            r=g[g["survey_participated"]]
-            row.update({
-                "Pulse":r["pulse"].mean(),"Workload":r["workload_pressure"].mean(),
-                "Manager Connection":r["manager_connection"].mean(),"1:1 Completion":r["one_to_one_completion"].mean(),
-                "Career Sentiment":r["career_sentiment"].mean(),"Flight Risk":r["flight_risk_signal"].mean(),
-            })
-        else:
-            row.update({"Pulse":np.nan,"Workload":np.nan,"Manager Connection":np.nan,"1:1 Completion":np.nan,"Career Sentiment":np.nan,"Flight Risk":np.nan})
-        rows.append(row)
-    result=pd.DataFrame(rows)
-    if order:
-        result[group_col]=pd.Categorical(result[group_col],categories=order,ordered=True)
-        result=result.sort_values(group_col)
-    return result
-
-tabs=st.tabs(["🏠 Executive Pulse","🌤 People Weather","🎯 Talent & Risk","👥 Manager Health","✨ AI Actions"])
+tabs = st.tabs(['🏢 Organisation Overview','📉 Attrition','🎧 Employee Listening','🌟 Talent','👥 Manager Effectiveness'])
 
 with tabs[0]:
-    st.subheader("Executive Pulse")
-    month_label=(pd.Timestamp(selected_sorted[0]).strftime("%b %Y") if len(selected_sorted)==1 else f"{pd.Timestamp(selected_sorted[0]).strftime('%b %Y')} – {pd.Timestamp(selected_sorted[-1]).strftime('%b %Y')}")
-    st.caption(f"Current view: {group_size} employees • {respondents} respondents • {month_label}")
+    st.subheader('Organisation Overview')
+    latest_month = max(pd.to_datetime(sel_months))
+    latest = filtered[filtered['month']==latest_month].copy()
+    hc = headcount(latest)
+    joiners = latest.loc[latest['join_month']==latest_month,'employee_id'].nunique()
+    exit_pipeline = latest.loc[latest['exit_pipeline_flag'],'employee_id'].nunique()
+    internal_moves = latest.loc[latest['internal_move_flag'],'employee_id'].nunique()
+    roles = open_roles_df[open_roles_df['month']==latest_month].copy()
+    if sel_division: roles = roles[roles['division'].isin(sel_division)]
+    open_roles = int(roles['open_roles'].sum())
 
-    c1,c2,c3,c4,c5,c6=st.columns(6)
-    c1.metric("Headcount",group_size)
-    c2.metric("Participation",f"{current_participation:.1f}%")
-    c3.metric("Pulse",pct_or_lock(current_pulse),delta_text(current_pulse,previous_pulse))
-    c4.metric("Workload Pressure",pct_or_lock(current_workload),delta_text(current_workload,previous_workload),delta_color="inverse")
-    c5.metric("Manager Connection",pct_or_lock(current_manager),delta_text(current_manager,previous_manager))
-    c6.metric("Flight Risk Signal",pct_or_lock(current_risk),delta_text(current_risk,previous_risk),delta_color="inverse")
+    c1,c2,c3,c4,c5 = st.columns(5)
+    c1.metric('Headcount',hc); c2.metric('Joiners',joiners); c3.metric('Exit Pipeline',exit_pipeline)
+    c4.metric('Open Roles',open_roles); c5.metric('Internal Moves',internal_moves)
 
-    st.divider()
-    st.markdown("### Four views for a quick leadership scan")
-    col1,col2=st.columns(2)
-    with col1:
-        st.markdown("#### 1. 12-month trend")
-        trend_rows=[]
-        for month,g in filtered_all.groupby("month"):
-            if respondent_count(g)>=MIN_RESPONDENTS:
-                trend_rows.append({"month":month,"Pulse":survey_mean(g,"pulse"),"Manager Connection":survey_mean(g,"manager_connection"),"Career Sentiment":survey_mean(g,"career_sentiment")})
-        trend=pd.DataFrame(trend_rows).set_index("month")
-        st.line_chart(trend,height=300)
-    with col2:
-        st.markdown("#### 2. Manager-wise Pulse")
-        manager_view=safe_groupby(current,"manager")
-        st.bar_chart(manager_view.dropna(subset=["Pulse"]).set_index("manager")[["Pulse"]],height=300)
+    left,right = st.columns(2)
+    with left:
+        gender_counts = latest.drop_duplicates('employee_id')['gender'].value_counts().reset_index()
+        gender_counts.columns=['Gender','Count']
+        st.plotly_chart(px.pie(gender_counts,names='Gender',values='Count',hole=.45,title='Gender mix'),use_container_width=True)
+    with right:
+        trend = filtered.groupby('month')['employee_id'].nunique().reset_index(name='Headcount')
+        st.plotly_chart(px.line(trend,x='month',y='Headcount',markers=True,title='Headcount trend'),use_container_width=True)
 
-    col3,col4=st.columns(2)
-    with col3:
-        st.markdown("#### 3. Division-wise Pulse & Workload")
-        division_view=safe_groupby(current,"division")
-        st.bar_chart(division_view.dropna(subset=["Pulse"]).set_index("division")[["Pulse","Workload"]],height=300)
-    with col4:
-        st.markdown("#### 4. Performance × Talent Mapping")
-        perf_talent_rows=[]
-        for (perf,talent_seg),g in current.groupby(["performance","talent"]):
-            if respondent_count(g)>=MIN_RESPONDENTS:
-                perf_talent_rows.append({"Segment":f"{perf} | {talent_seg}","Pulse":survey_mean(g,"pulse"),"Flight Risk":survey_mean(g,"flight_risk_signal")})
-        perf_talent=pd.DataFrame(perf_talent_rows)
-        if not perf_talent.empty:
-            st.bar_chart(perf_talent.set_index("Segment")[["Pulse","Flight Risk"]],height=300)
-        else:
-            st.info("No segment meets the minimum respondent threshold.")
+    positive=[]; watch=[]
+    if internal_moves>=25: positive.append(f'Internal mobility is healthy with {internal_moves} employees moving internally.')
+    if joiners>=15: positive.append(f'Hiring momentum is strong with {joiners} joiners in the latest month.')
+    if open_roles<=45: positive.append(f'Open roles are relatively contained at {open_roles}.')
+    if exit_pipeline>=20: watch.append(f'{exit_pipeline} employees are currently in the exit pipeline.')
+    if open_roles>=50: watch.append(f'Open roles are elevated at {open_roles}, suggesting capacity pressure.')
+    if joiners<8: watch.append(f'Joiner volume is low at {joiners}, which may slow backfills or growth.')
+    if not positive: positive.append('Overall workforce movement is stable in the selected cut.')
+    if not watch: watch.append('No major workforce pressure is visible in the selected cut.')
 
-    st.markdown("#### AI: What changed?")
-    ai_messages=[]
-    if not pd.isna(current_workload) and not pd.isna(previous_workload):
-        diff=current_workload-previous_workload
-        if diff>=3: ai_messages.append(f"Workload pressure rose by {diff:.1f} points versus the comparison period.")
-        elif diff<=-3: ai_messages.append(f"Workload pressure improved by {abs(diff):.1f} points versus the comparison period.")
-    if not pd.isna(current_pulse) and not pd.isna(previous_pulse):
-        diff=current_pulse-previous_pulse
-        if diff>=3: ai_messages.append(f"Pulse improved by {diff:.1f} points, indicating stronger employee sentiment.")
-        elif diff<=-3: ai_messages.append(f"Pulse declined by {abs(diff):.1f} points and merits a closer look.")
-    if not pd.isna(current_manager) and not pd.isna(previous_manager):
-        diff=current_manager-previous_manager
-        if diff>=3: ai_messages.append(f"Manager Connection strengthened by {diff:.1f} points.")
-        elif diff<=-3: ai_messages.append(f"Manager Connection fell by {abs(diff):.1f} points.")
-    if current_participation<60:
-        ai_messages.append(f"Participation is only {current_participation:.1f}%, so insights should be interpreted cautiously.")
-    if not ai_messages:
-        ai_messages.append("The selected population is broadly stable versus the comparison period. No leading indicator moved by more than 3 points.")
-    st.markdown('<div class="ai-box"><b>AI summary</b><br>'+"<br>".join([f"• {x}" for x in ai_messages])+'</div>',unsafe_allow_html=True)
+    st.markdown('<div class="ai-good"><b>Positive signal</b><br>'+ '<br>'.join('• '+x for x in positive) + '<br><br><b>Suggested action:</b> sustain internal mobility and preserve hiring momentum where demand is highest.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ai-watch"><b>Watch-out</b><br>'+ '<br>'.join('• '+x for x in watch) + '<br><br><b>Suggested action:</b> review vacancies, exit pipeline and hiring capacity together before the next monthly review.</div>', unsafe_allow_html=True)
 
 with tabs[1]:
-    st.subheader("People Weather")
-    st.write("A quick view of where organisational health is strong, stable or under pressure.")
-    weather=safe_groupby(current,"division")
+    st.subheader('Attrition')
+    monthly_attr = filtered.groupby('month').agg(Exits=('exit_event','sum'),HC=('employee_id','nunique')).reset_index()
+    monthly_attr['Attrition %'] = monthly_attr['Exits']/monthly_attr['HC']*100
+    fig = px.line(monthly_attr,x='month',y='Attrition %',markers=True,text='Attrition %',title='Monthly attrition')
+    fig.update_traces(texttemplate='%{text:.1f}%',textposition='top center')
+    st.plotly_chart(fig,use_container_width=True)
 
-    def health_score(row):
-        if pd.isna(row["Pulse"]): return np.nan
-        return row["Pulse"]*.28 + row["Manager Connection"]*.22 + row["Career Sentiment"]*.18 + row["1:1 Completion"]*.12 + (100-row["Workload"])*.10 + (100-row["Flight Risk"])*.10
+    q = filtered.copy(); q['Quarter']=q['month'].dt.to_period('Q').astype(str)
+    quarterly = q.groupby('Quarter').agg(Exits=('exit_event','sum'),HC=('employee_id','nunique')).reset_index()
+    quarterly['Attrition %']=quarterly['Exits']/quarterly['HC']*100
+    ltm_exits = filtered['exit_event'].sum(); avg_hc = filtered.groupby('month')['employee_id'].nunique().mean(); ltm_attr = ltm_exits/avg_hc*100 if avg_hc else 0
+    c1,c2,c3 = st.columns(3)
+    c1.metric('LTM Attrition',f'{ltm_attr:.1f}%'); c2.metric('Voluntary Exits',int((filtered['exit_type']=='Voluntary').sum())); c3.metric('Involuntary Exits',int((filtered['exit_type']=='Involuntary').sum()))
 
-    weather["Health Score"]=weather.apply(health_score,axis=1)
-    def weather_label(score):
-        if pd.isna(score): return "🔒 Suppressed"
-        if score>=74: return "☀️ Clear"
-        if score>=66: return "🌤 Stable"
-        if score>=58: return "🌥 Watch"
-        return "🌧 Pressure"
-    weather["People Weather"]=weather["Health Score"].apply(weather_label)
-    display_weather=weather[["division","Headcount","Respondents","Participation","People Weather","Health Score","Pulse","Workload","Manager Connection","Flight Risk"]].copy()
-    display_weather.columns=["Division","Headcount","Respondents","Participation %","People Weather","Health Score %","Pulse %","Workload %","Manager Connection %","Flight Risk %"]
-    for col in ["Participation %","Health Score %","Pulse %","Workload %","Manager Connection %","Flight Risk %"]:
-        display_weather[col]=display_weather[col].round(1)
-    st.dataframe(display_weather,use_container_width=True,hide_index=True)
-    st.markdown("#### Workload pressure by division")
-    st.bar_chart(weather.dropna(subset=["Workload"]).set_index("division")[["Workload"]])
+    left,right=st.columns(2)
+    with left:
+        fig=px.bar(quarterly,x='Quarter',y='Attrition %',text='Attrition %',title='Quarterly attrition')
+        fig.update_traces(texttemplate='%{text:.1f}%',textposition='outside'); st.plotly_chart(fig,use_container_width=True)
+    with right:
+        mix=filtered[filtered['exit_event']==1]['exit_type'].value_counts().reset_index(); mix.columns=['Type','Count']
+        if len(mix): st.plotly_chart(px.pie(mix,names='Type',values='Count',hole=.45,title='Voluntary vs involuntary'),use_container_width=True)
+        else: st.info('No exits in the selected cut.')
+
+    voluntary=filtered[(filtered['exit_event']==1)&(filtered['exit_type']=='Voluntary')]['exit_reason'].value_counts().reset_index(); voluntary.columns=['Reason','Count']
+    involuntary=filtered[(filtered['exit_event']==1)&(filtered['exit_type']=='Involuntary')]['exit_reason'].value_counts().reset_index(); involuntary.columns=['Reason','Count']
+    left,right=st.columns(2)
+    with left:
+        st.markdown('#### Top voluntary exit reasons')
+        if len(voluntary): st.plotly_chart(px.bar(voluntary,x='Count',y='Reason',orientation='h'),use_container_width=True)
+        else: st.info('No voluntary exits in this cut.')
+    with right:
+        st.markdown('#### Involuntary separation types')
+        if len(involuntary): st.plotly_chart(px.bar(involuntary,x='Count',y='Reason',orientation='h'),use_container_width=True)
+        else: st.info('No involuntary exits in this cut.')
 
 with tabs[2]:
-    st.subheader("Talent & Flight-Risk Signals")
-    st.caption("Group-level signals only. People Pulse never labels an individual employee as a flight risk.")
-    talent_order=["Critical Talent","High Potential","Core Talent"]
-    talent_view=safe_groupby(current,"talent",order=talent_order)
-    display_talent=talent_view[["talent","Headcount","Respondents","Participation","Pulse","Workload","Manager Connection","1:1 Completion","Career Sentiment","Flight Risk"]].copy()
-    display_talent.columns=["Talent Segment","Headcount","Respondents","Participation %","Pulse %","Workload %","Manager Connection %","1:1 Completion %","Career Sentiment %","Flight Risk %"]
-    for col in display_talent.columns[3:]:
-        display_talent[col]=display_talent[col].round(1)
-    st.dataframe(display_talent,use_container_width=True,hide_index=True)
+    st.subheader('Employee Listening')
+    c1,c2=st.columns(2); c1.metric('Satisfaction',pct(survey_mean(filtered,'satisfaction'))); c2.metric('Participation',f'{participation(filtered):.0f}%')
+    theme_map={'Manager':'theme_manager','Work':'theme_work','Team':'theme_team','Wellbeing':'theme_wellbeing','Culture':'theme_culture','Org Listening':'theme_org_listening','Learning':'theme_learning','Inclusivity':'theme_inclusivity','Innovation':'theme_innovation'}
+    themes=pd.DataFrame([{'Theme':name,'Sentiment':survey_mean(filtered,col)} for name,col in theme_map.items()]).dropna()
+    fig=px.bar(themes.sort_values('Sentiment'),x='Sentiment',y='Theme',orientation='h',text='Sentiment',title='Current theme sentiment')
+    fig.update_traces(texttemplate='%{text:.0f}%',textposition='outside'); fig.update_xaxes(range=[0,100],ticksuffix='%'); st.plotly_chart(fig,use_container_width=True)
 
-    st.markdown("#### Where is career risk concentrated?")
-    tenure_view=safe_groupby(current,"tenure")
-    st.bar_chart(tenure_view.dropna(subset=["Career Sentiment"]).set_index("tenure")[["Career Sentiment","Flight Risk"]])
-
-    two_four_exceptional=current[(current["tenure"]=="2–4 years") & (current["performance"]=="Exceptional")]
-    if respondent_count(two_four_exceptional)>=MIN_RESPONDENTS:
-        risk=survey_mean(two_four_exceptional,"flight_risk_signal")
-        career=survey_mean(two_four_exceptional,"career_sentiment")
-        st.markdown(f'<div class="ai-box"><b>AI signal:</b> 2–4 year exceptional performers show a <b>{risk:.1f}% Flight Risk Signal</b> and <b>{career:.1f}% Career Sentiment</b>.<br><br><b>Suggested action:</b> prioritise career-path conversations, internal mobility and role-expansion opportunities for this cohort.</div>',unsafe_allow_html=True)
+    trend_rows=[]
+    for month,g in filtered.groupby('month'):
+        for name,col in theme_map.items():
+            val=survey_mean(g,col)
+            if not pd.isna(val): trend_rows.append({'Month':month,'Theme':name,'Sentiment':val})
+    trend_themes=pd.DataFrame(trend_rows)
+    selected_theme=st.selectbox('Sentiment trend theme',list(theme_map.keys()))
+    t=trend_themes[trend_themes['Theme']==selected_theme]
+    fig=px.line(t,x='Month',y='Sentiment',markers=True,text='Sentiment',title=f'{selected_theme} sentiment trend')
+    fig.update_traces(texttemplate='%{text:.0f}%',textposition='top center'); st.plotly_chart(percent_chart(fig),use_container_width=True)
 
 with tabs[3]:
-    st.subheader("Manager Health")
-    st.write("A manager-level view of connection, cadence, workload and participation. Survey results do not populate for fewer than 5 respondents.")
-    manager_order=["Anuj","Beena","Cassie","Farah","Priya","Tina","Ronit","Yusuf","Rafee","Zainab"]
-    manager_health=safe_groupby(current,"manager",order=manager_order)
-    manager_display=manager_health.copy()
-    manager_display["Participation %"]=manager_display["Participation"].round(1)
-    for col in ["Pulse","Workload","Manager Connection","1:1 Completion","Career Sentiment","Flight Risk"]:
-        manager_display[col]=manager_display[col].apply(pct_or_lock)
-    manager_display=manager_display[["manager","Headcount","Respondents","Participation %","Pulse","Manager Connection","1:1 Completion","Workload","Flight Risk"]]
-    manager_display.columns=["Manager","Team Size","Respondents","Participation %","Pulse","Manager Connection","1:1 Completion","Workload","Flight Risk"]
-    st.dataframe(manager_display,use_container_width=True,hide_index=True)
+    st.subheader('Talent')
+    latest_month=max(pd.to_datetime(sel_months)); latest=filtered[filtered['month']==latest_month].copy()
+    top_talent=latest[latest['talent']=='Top Talent']['employee_id'].nunique(); high_risk=latest[latest['flight_risk']>=45]['employee_id'].nunique()
+    critical_roles=latest[latest['job_level'].isin(['L3','L4'])]; covered=critical_roles[critical_roles['successor_coverage']!='No successor']['employee_id'].nunique(); critical_total=critical_roles['employee_id'].nunique(); coverage=covered/critical_total*100 if critical_total else np.nan
+    ijp=latest[latest['movement_type']=='IJP']['employee_id'].nunique(); onsite=latest[latest['movement_type']=='Onsite Rotation']['employee_id'].nunique()
+    c1,c2,c3,c4,c5=st.columns(5); c1.metric('Top Talent',top_talent); c2.metric('High Flight Risk',high_risk); c3.metric('Successor Coverage',pct(coverage)); c4.metric('IJP Moves',ijp); c5.metric('Onsite Rotation',onsite)
 
-    st.markdown("#### Manager Risk Radar")
-    radar=manager_health.dropna(subset=["Manager Connection","Workload"]).copy()
-    if not radar.empty:
-        st.scatter_chart(radar,x="Manager Connection",y="Workload",size="Headcount")
-    zainab_row=manager_health[manager_health["manager"]=="Zainab"]
-    if not zainab_row.empty:
-        st.info(f"🔒 Zainab has {int(zainab_row.iloc[0]['Respondents'])} respondents in this view. Her survey scores are intentionally suppressed because the minimum is 5.")
+    left,right=st.columns(2)
+    with left:
+        talent_mix=latest.drop_duplicates('employee_id')['talent'].value_counts().reset_index(); talent_mix.columns=['Talent','Count']
+        st.plotly_chart(px.bar(talent_mix,x='Talent',y='Count',text='Count',title='Talent mix'),use_container_width=True)
+    with right:
+        mobility=latest[latest['movement_type']!='None']['movement_type'].value_counts().reset_index(); mobility.columns=['Movement','Count']
+        if len(mobility): st.plotly_chart(px.bar(mobility,x='Movement',y='Count',text='Count',title='Internal mobility'),use_container_width=True)
+        else: st.info('No internal mobility in the selected cut.')
+
+    risk_by_talent=latest.groupby('talent')['flight_risk'].mean().reset_index()
+    fig=px.bar(risk_by_talent,x='talent',y='flight_risk',text='flight_risk',title='Flight risk by talent segment')
+    fig.update_traces(texttemplate='%{text:.0f}%',textposition='outside'); st.plotly_chart(percent_chart(fig),use_container_width=True)
 
 with tabs[4]:
-    st.subheader("AI Intervention Planner")
-    st.write("Recommendations adapt to the selected months and organisational cut.")
-    issues=[]
-    positives=[]
-    if current_participation<60:
-        issues.append(("Participation",f"Participation is {current_participation:.1f}%. Improve response coverage before drawing strong conclusions."))
-    if not pd.isna(current_workload):
-        if current_workload>=60: issues.append(("Workload",f"Workload Pressure is elevated at {current_workload:.1f}%. Review account load, escalation volume and resourcing."))
-        elif current_workload<40: positives.append(f"Workload Pressure is healthy at {current_workload:.1f}%.")
-    if not pd.isna(current_manager):
-        if current_manager<65: issues.append(("Manager connection",f"Manager Connection is {current_manager:.1f}%. Prioritise manager check-ins and quality 1:1s."))
-        elif current_manager>=75: positives.append(f"Manager Connection is strong at {current_manager:.1f}%.")
-    if not pd.isna(current_risk):
-        if current_risk>=45: issues.append(("Retention",f"Flight Risk Signal is elevated at {current_risk:.1f}%. Review career mobility, critical roles and manager hotspots."))
-        elif current_risk<30: positives.append(f"Flight Risk Signal is currently low at {current_risk:.1f}%.")
-    if not pd.isna(current_career):
-        if current_career<65: issues.append(("Career",f"Career Sentiment is {current_career:.1f}%. Prioritise progression clarity and internal opportunities."))
-        elif current_career>=75: positives.append(f"Career Sentiment is healthy at {current_career:.1f}%.")
-    if not pd.isna(current_one_to_one) and current_one_to_one<70:
-        issues.append(("Manager cadence",f"1:1 Completion is {current_one_to_one:.1f}%. Reinforce manager cadence before the next pulse."))
-
-    if positives:
-        st.markdown('<div class="good-box"><b>What is working</b><br>'+"<br>".join([f"• {x}" for x in positives])+'</div>',unsafe_allow_html=True)
-    if issues:
-        st.markdown('<div class="ai-box"><b>Priority actions</b><br>'+"<br>".join([f"• <b>{name}:</b> {msg}" for name,msg in issues])+'</div>',unsafe_allow_html=True)
-    else:
-        st.success("No material threshold is currently breached for the selected population. Maintain the current operating rhythm and keep monitoring leading indicators.")
-
-    st.markdown("#### Why am I seeing this?")
-    st.write("People Pulse uses aggregated signals across Pulse, workload, manager connection, career sentiment, 1:1 completion, talent mapping and retention indicators. The AI layer explains patterns and recommends possible interventions; it does not make employment decisions or expose individual responses.")
-    st.info("Prototype principle: deterministic analytics calculate the metrics. AI interprets the signals and recommends action.")
+    st.subheader('Manager Effectiveness')
+    manager_rows=[]
+    for mgr,g in filtered.groupby('manager'):
+        manager_rows.append({'Manager':mgr,'HC':headcount(g),'Respondents':respondents(g),'1:1 Coverage':survey_mean(g,'one_to_one'),'Skip Levels':survey_mean(g,'skip_level'),'Coaching':survey_mean(g,'coaching'),'Team Pulse':survey_mean(g,'team_pulse'),'Learning Score':survey_mean(g,'learning_score')})
+    mgr_df=pd.DataFrame(manager_rows)
+    st.dataframe(mgr_df.round(1),use_container_width=True,hide_index=True)
+    metric_choice=st.selectbox('Manager metric',['1:1 Coverage','Skip Levels','Coaching','Team Pulse','Learning Score'])
+    plot_df=mgr_df.dropna(subset=[metric_choice])
+    fig=px.bar(plot_df,x='Manager',y=metric_choice,text=metric_choice,title=f'{metric_choice} by manager')
+    fig.update_traces(texttemplate='%{text:.0f}%',textposition='outside'); st.plotly_chart(percent_chart(fig),use_container_width=True)
+    if len(plot_df):
+        best=plot_df.sort_values(metric_choice,ascending=False).iloc[0]; low=plot_df.sort_values(metric_choice).iloc[0]
+        st.markdown(f'<div class="ai-good"><b>Positive signal</b><br>{best["Manager"]} is strongest on {metric_choice} at {best[metric_choice]:.0f}%.</div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="ai-watch"><b>Watch-out</b><br>{low["Manager"]} is lowest on {metric_choice} at {low[metric_choice]:.0f}%.<br><br><b>Suggested action:</b> diagnose whether the gap is driven by cadence, capability, workload or team context before choosing an intervention.</div>',unsafe_allow_html=True)
 
 st.divider()
-st.caption("People Pulse prototype • Synthetic Customer Success data • 500 employees • No individual employee records or comments displayed • Survey insights with fewer than 5 respondents are suppressed.")
+st.caption('People Pulse prototype • Synthetic Customer Success data • 500 employees • No individual employee records or comments displayed.')
