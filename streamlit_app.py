@@ -95,7 +95,7 @@ QUARTER_MONTHS = {
 @st.cache_data
 def generate_data():
     rng = np.random.default_rng(42)
-    n = 500
+    n = 620
     months = pd.date_range("2025-04-01", "2026-12-01", freq="MS")
 
     employees = pd.DataFrame({
@@ -103,11 +103,11 @@ def generate_data():
     })
 
     divisions = (
-        ["Enterprise CS"] * 145 +
-        ["Mid-Market CS"] * 115 +
-        ["SMB CS"] * 90 +
-        ["Customer Support"] * 85 +
-        ["CS Operations"] * 65
+        ["Enterprise CS"] * 180 +
+        ["Mid-Market CS"] * 143 +
+        ["SMB CS"] * 112 +
+        ["Customer Support"] * 105 +
+        ["CS Operations"] * 80
     )
     rng.shuffle(divisions)
     employees["division"] = divisions
@@ -132,16 +132,78 @@ def generate_data():
         n, p=[0.72, 0.18, 0.10]
     )
 
-    genders = np.array(["Male"] * 265 + ["Female"] * 225 + ["Others"] * 10)
+    genders = np.array(["Male"] * 329 + ["Female"] * 279 + ["Others"] * 12)
     rng.shuffle(genders)
     employees["gender"] = genders
 
-    managers = np.repeat(["Anuj", "Cassie", "Rafee", "Priya", "Zainab"], 100)
+    managers = np.repeat(["Anuj", "Cassie", "Rafee", "Priya", "Zainab"], 124)
     rng.shuffle(managers)
     employees["manager"] = managers
 
-    # Join month is distributed across the full reporting period.
-    employees["join_month"] = rng.choice(months, n)
+    # Create a roughly 500-person organisation whose monthly active headcount
+    # rises and falls by ~30–50 people as hiring and exits change the population.
+    #
+    # The wider synthetic roster is 620 unique people across the full period,
+    # while active monthly headcount stays roughly in the 455–525 range.
+    target_hc = {
+        pd.Timestamp("2025-04-01"): 470,
+        pd.Timestamp("2025-05-01"): 505,
+        pd.Timestamp("2025-06-01"): 462,
+        pd.Timestamp("2025-07-01"): 498,
+        pd.Timestamp("2025-08-01"): 455,
+        pd.Timestamp("2025-09-01"): 493,
+        pd.Timestamp("2025-10-01"): 525,
+        pd.Timestamp("2025-11-01"): 480,
+        pd.Timestamp("2025-12-01"): 515,
+        pd.Timestamp("2026-01-01"): 472,
+        pd.Timestamp("2026-02-01"): 510,
+        pd.Timestamp("2026-03-01"): 465,
+        pd.Timestamp("2026-04-01"): 502,
+        pd.Timestamp("2026-05-01"): 458,
+        pd.Timestamp("2026-06-01"): 496,
+        pd.Timestamp("2026-07-01"): 523,
+        pd.Timestamp("2026-08-01"): 478,
+        pd.Timestamp("2026-09-01"): 512,
+        pd.Timestamp("2026-10-01"): 468,
+        pd.Timestamp("2026-11-01"): 506,
+        pd.Timestamp("2026-12-01"): 476,
+    }
+
+    # Employees receive a first-entry month. The active roster is then built
+    # sequentially so people can join and leave without "disappearing and reappearing".
+    # Earlier roster members start in Apr-25; later IDs enter over time.
+    initial_active = set(employees["employee_id"].iloc[:target_hc[months[0]]])
+    first_active_month = {eid: months[0] for eid in initial_active}
+    last_active_month = {eid: months[-1] for eid in initial_active}
+
+    inactive_pool = [eid for eid in employees["employee_id"] if eid not in initial_active]
+    current_active = set(initial_active)
+    active_sets = {months[0]: set(current_active)}
+
+    for prev_month, month in zip(months[:-1], months[1:]):
+        target = target_hc[month]
+        current = len(current_active)
+
+        if target > current:
+            need = target - current
+            add_ids = inactive_pool[:need]
+            inactive_pool = inactive_pool[need:]
+            for eid in add_ids:
+                current_active.add(eid)
+                first_active_month[eid] = month
+                last_active_month[eid] = months[-1]
+        elif target < current:
+            need = current - target
+            removable = list(current_active)
+            rng.shuffle(removable)
+            remove_ids = removable[:need]
+            for eid in remove_ids:
+                current_active.remove(eid)
+                last_active_month[eid] = prev_month
+
+        active_sets[month] = set(current_active)
+
+    employees["join_month"] = employees["employee_id"].map(first_active_month)
 
     # Stable attributes for internal mobility propensity.
     employees["mobility_propensity"] = rng.random(n)
@@ -184,6 +246,9 @@ def generate_data():
         base_flight = rng.normal(28, 8)
 
         for mi, month in enumerate(months):
+            if emp["employee_id"] not in active_sets[month]:
+                continue
+
             div = emp["division"]
             mgr = emp["manager"]
 
@@ -1232,6 +1297,6 @@ with tabs[4]:
 
 st.divider()
 st.caption(
-    "People Pulse prototype • Synthetic Customer Success data • 500 employees • "
+    "People Pulse prototype • Synthetic Customer Success data • ~500 active employees per month • "
     "No individual employee records or comments displayed."
 )
