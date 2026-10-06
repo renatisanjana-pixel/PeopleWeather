@@ -4,6 +4,13 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+# Formal, restrained chart palette
+px.defaults.template = "plotly_white"
+px.defaults.color_discrete_sequence = [
+    "#2F5FB3", "#5E72C9", "#7AA7E8", "#5C738C",
+    "#2E8B7B", "#9A6FB0", "#B7865A", "#8B97A8"
+]
+
 st.set_page_config(
     page_title="People Pulse | Customer Success",
     page_icon="🟣",
@@ -17,59 +24,264 @@ MIN_RESPONDENTS = 5
 # ============================================================
 st.markdown("""
 <style>
-.block-container {padding-top: 1.1rem; padding-bottom: 3rem;}
+:root{
+    --navy:#14253D;
+    --navy-2:#1B304D;
+    --ink:#14213D;
+    --slate:#52627A;
+    --muted:#7B8798;
+    --line:#E4E9F0;
+    --surface:#FFFFFF;
+    --canvas:#F6F8FB;
+    --accent:#3657D6;
+    --accent-soft:#EEF2FF;
+    --green:#138A72;
+    --green-soft:#ECF8F4;
+    --red:#C94A56;
+    --red-soft:#FCEEEF;
+    --amber:#B7791F;
+    --amber-soft:#FFF7E8;
+}
 
-[data-testid="stMetric"]{
-    background:#ffffff;
-    border:1px solid #ececf2;
-    padding:12px 14px;
+/* App canvas */
+.stApp{
+    background:var(--canvas);
+    color:var(--ink);
+}
+.block-container{
+    padding-top:0.8rem;
+    padding-bottom:3rem;
+    max-width:1500px;
+}
+
+/* Hide some default Streamlit chrome spacing, while keeping Share/menu controls usable */
+header[data-testid="stHeader"]{
+    background:rgba(246,248,251,.92);
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"]{
+    background:linear-gradient(180deg,#14253D 0%,#172A44 100%);
+    border-right:1px solid #243A58;
+}
+section[data-testid="stSidebar"] > div{
+    background:transparent;
+}
+section[data-testid="stSidebar"] *{
+    color:#F7F9FC;
+}
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p{
+    color:#B9C5D4 !important;
+    line-height:1.55;
+}
+section[data-testid="stSidebar"] h1{
+    font-size:1.45rem !important;
+    margin-top:.35rem !important;
+    margin-bottom:.35rem !important;
+}
+section[data-testid="stSidebar"] label{
+    color:#DCE4EE !important;
+    font-weight:600 !important;
+    font-size:.92rem !important;
+}
+
+/* Sidebar select controls */
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div{
+    background:#203654 !important;
+    border:1px solid #3A506D !important;
+    border-radius:9px !important;
+    min-height:42px;
+    max-height:95px;
+    overflow-y:auto;
+    box-shadow:none !important;
+}
+section[data-testid="stSidebar"] [data-baseweb="tag"]{
+    background:#5367B8 !important;
+    border:none !important;
+    max-width:145px;
+}
+section[data-testid="stSidebar"] [data-baseweb="tag"] span{
+    color:white !important;
+}
+section[data-testid="stSidebar"] svg{
+    fill:#DCE4EE !important;
+}
+
+/* Main executive header */
+.pp-topbar{
+    background:#FFFFFF;
+    border:1px solid var(--line);
     border-radius:14px;
+    padding:14px 18px;
+    margin:0 0 10px 0;
+    box-shadow:0 1px 3px rgba(20,37,61,.04);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
 }
-[data-testid="stMetricLabel"]{font-size:.86rem;}
-[data-testid="stMetricValue"]{font-size:1.9rem;}
-
-.pp-header{
-    padding:14px 20px;
-    border-radius:18px;
-    background:linear-gradient(120deg,#4C1D95,#7C3AED,#A855F7);
+.pp-brand{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+}
+.pp-mark{
+    width:34px;
+    height:34px;
+    border-radius:9px;
+    background:var(--navy);
     color:white;
-    margin-bottom:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:800;
+    letter-spacing:-1px;
+    margin-top:1px;
 }
-.pp-header h1{margin:0;font-size:28px;line-height:1.1;}
-.pp-header p{margin:5px 0 0;opacity:.94;line-height:1.35;font-size:0.98rem;}
+.pp-title{
+    font-size:1.55rem;
+    line-height:1.08;
+    font-weight:750;
+    color:var(--ink);
+    margin:0;
+}
+.pp-subtitle{
+    color:var(--slate);
+    font-size:.92rem;
+    margin-top:4px;
+}
+.pp-period{
+    flex:0 0 auto;
+    border:1px solid #DDE4ED;
+    border-radius:10px;
+    padding:8px 12px;
+    background:#FBFCFE;
+    min-width:130px;
+    text-align:left;
+}
+.pp-period b{
+    display:block;
+    color:var(--ink);
+    font-size:.9rem;
+}
+.pp-period span{
+    color:var(--muted);
+    font-size:.78rem;
+}
 
+/* Privacy banner */
 .privacy{
-    display:inline-block;
-    padding:7px 12px;
-    border-radius:18px;
-    background:#F3E8FF;
-    color:#6B21A8;
+    display:block;
+    padding:8px 12px;
+    border:1px solid #DCE5F4;
+    border-radius:9px;
+    background:#EEF3FB;
+    color:#334E76;
     font-weight:600;
-    font-size:13px;
-    margin-bottom:8px;
+    font-size:12.5px;
+    margin:3px 0 10px 0;
 }
-.ai-good{
-    padding:16px 18px;
-    background:#F0FDF4;
-    border-left:5px solid #22C55E;
+
+/* Tabs */
+div[data-baseweb="tab-list"]{
+    gap:1.1rem;
+    border-bottom:1px solid #DCE3EC;
+}
+button[data-baseweb="tab"]{
+    color:#52627A !important;
+    font-weight:600 !important;
+    padding-left:.2rem !important;
+    padding-right:.2rem !important;
+}
+button[data-baseweb="tab"][aria-selected="true"]{
+    color:#243B78 !important;
+}
+div[data-baseweb="tab-highlight"]{
+    background:#3657D6 !important;
+}
+
+/* Headings */
+h1,h2,h3,h4{
+    color:var(--ink);
+    letter-spacing:-.015em;
+}
+[data-testid="stHeadingWithActionElements"] h2,
+[data-testid="stHeadingWithActionElements"] h3{
+    font-weight:700;
+}
+
+/* Metric cards */
+[data-testid="stMetric"]{
+    background:#FFFFFF;
+    border:1px solid #E1E7EF;
+    padding:14px 16px;
     border-radius:12px;
-    margin:8px 0;
+    min-height:108px;
+    box-shadow:0 1px 2px rgba(20,37,61,.035);
+}
+[data-testid="stMetricLabel"]{
+    font-size:.82rem;
+    color:#56657A !important;
+    font-weight:600;
+}
+[data-testid="stMetricValue"]{
+    font-size:1.85rem;
+    color:#17233C !important;
+    font-weight:650;
+    letter-spacing:-.02em;
+}
+[data-testid="stMetricDelta"]{
+    font-size:.78rem;
+}
+
+/* Dataframes */
+[data-testid="stDataFrame"]{
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+}
+
+/* AI insight cards */
+.ai-good{
+    padding:15px 17px;
+    background:#F2F8F5;
+    border:1px solid #DCECE4;
+    border-left:4px solid #3B8C6E;
+    border-radius:10px;
+    margin:9px 0;
+    color:#24364A;
 }
 .ai-watch{
-    padding:16px 18px;
-    background:#FFF7ED;
-    border-left:5px solid #F97316;
-    border-radius:12px;
-    margin:8px 0;
+    padding:15px 17px;
+    background:#FBF7F2;
+    border:1px solid #F0E4D5;
+    border-left:4px solid #B77A31;
+    border-radius:10px;
+    margin:9px 0;
+    color:#24364A;
 }
 
-/* Keep multi-select chips contained inside the filter box */
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-    max-height: 95px;
-    overflow-y: auto;
+/* General captions / dividers */
+[data-testid="stCaptionContainer"]{
+    color:#7B8798;
 }
-section[data-testid="stSidebar"] [data-baseweb="tag"] {
-    max-width: 135px;
+hr{
+    border-color:#E3E8EF !important;
+}
+
+/* Buttons / selectbox */
+button[kind="secondary"]{
+    border-radius:9px !important;
+}
+
+/* Compact spacing between blocks */
+[data-testid="stVerticalBlock"] > div{
+    gap:.45rem;
+}
+
+/* Slightly smaller Plotly modebar */
+.modebar{
+    opacity:.45;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -884,12 +1096,12 @@ def backup_progress_html(title, covered_pct, left_label, right_label):
             <div style="font-size:0.95rem; font-weight:700; color:#111827;">{covered_pct:.0f}% covered</div>
         </div>
         <div style="display:flex; width:100%; height:18px; border-radius:999px; overflow:hidden; background:#e5e7eb;">
-            <div style="width:{covered_pct:.2f}%; background:#22c55e;"></div>
-            <div style="width:{uncovered_pct:.2f}%; background:#ef4444;"></div>
+            <div style="width:{covered_pct:.2f}%; background:#2E8B7B;"></div>
+            <div style="width:{uncovered_pct:.2f}%; background:#C94A56;"></div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.35rem; font-size:0.9rem;">
-            <div style="color:#166534;"><b>{left_label}</b></div>
-            <div style="color:#991b1b;"><b>{right_label}</b></div>
+            <div style="color:#23695D;"><b>{left_label}</b></div>
+            <div style="color:#9D3743;"><b>{right_label}</b></div>
         </div>
     </div>
     """
@@ -974,27 +1186,20 @@ def compact_multiselect(label, options, key, format_func=None):
 
 
 # ============================================================
-# HEADER
-# ============================================================
-st.markdown("""
-<div class="pp-header">
-<h1>People Pulse</h1>
-<p>
-Customer Success • People Health & Organisational Insights<br>
-A focused view of workforce health, employee voice, talent and manager effectiveness.
-</p>
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    '<div class="privacy">🔒 Synthetic data • No individual records shown • Minimum survey group = 5</div>',
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
 # SIDEBAR
 # ============================================================
+st.sidebar.markdown(
+    """
+    <div style="display:flex;align-items:center;gap:10px;padding:2px 0 12px 0;
+                border-bottom:1px solid #38506e;margin-bottom:14px;">
+        <div style="width:30px;height:30px;border-radius:8px;background:#ffffff;
+                    color:#14253D;display:flex;align-items:center;justify-content:center;
+                    font-weight:800;">PP</div>
+        <div style="font-size:1.15rem;font-weight:750;color:white;">People Pulse</div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.sidebar.title("Data cuts")
 st.sidebar.caption(
     "Leave Month and Quarter blank to view the latest 6 months. "
@@ -1043,6 +1248,47 @@ if filtered.empty:
 period_start = min(period_months)
 period_end = max(period_months)
 
+# ============================================================
+# EXECUTIVE HEADER
+# ============================================================
+if sel_quarters:
+    period_label = ", ".join(sel_quarters)
+else:
+    period_label = f"{period_start.strftime('%b %Y')} – {period_end.strftime('%b %Y')}"
+
+date_label = (
+    f"{period_start.strftime('%b %Y')} – {period_end.strftime('%b %Y')}"
+    if period_start != period_end
+    else period_start.strftime('%b %Y')
+)
+
+st.markdown(
+    f"""
+    <div class="pp-topbar">
+        <div class="pp-brand">
+            <div class="pp-mark">PP</div>
+            <div>
+                <div class="pp-title">People Pulse</div>
+                <div class="pp-subtitle">
+                    Customer Success &nbsp;•&nbsp; People Health &amp; Organisational Insights<br>
+                    A focused view of workforce health, employee voice, talent and manager effectiveness.
+                </div>
+            </div>
+        </div>
+        <div class="pp-period">
+            <b>{period_label}</b>
+            <span>{date_label}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="privacy">🔒 Synthetic data • No individual records shown • Minimum survey group = 5</div>',
+    unsafe_allow_html=True
+)
+
 
 # ============================================================
 # TABS
@@ -1060,7 +1306,7 @@ tabs = st.tabs([
 # 1. ORGANISATION OVERVIEW
 # ============================================================
 with tabs[0]:
-    st.subheader("Organisation Overview")
+    st.markdown("## Organisation Overview")
 
     avg_hc = period_headcount_average(filtered_non_time, period_months)
 
@@ -1125,7 +1371,7 @@ with tabs[0]:
     # --------------------------------------------------------
     biz = business_metrics(filtered)
 
-    st.markdown("### Customer & business impact")
+    st.markdown("### Customer & Business Impact")
     row1 = st.columns(3)
     row2 = st.columns(3)
 
@@ -1185,7 +1431,7 @@ with tabs[0]:
         "Commercial Value at Risk is not a prediction of individual resignation."
     )
 
-    st.markdown("#### Backup coverage action tracker")
+    st.markdown("#### Backup Coverage Action Tracker")
     accounts_total = max(1, biz["total_accounts"])
     accounts_covered = min(biz["covered_accounts"], accounts_total)
     accounts_uncovered = max(0, accounts_total - accounts_covered)
@@ -1279,7 +1525,7 @@ with tabs[0]:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### AI summaries")
+    st.markdown("### AI Summaries")
 
     # Current quarter comparison for voluntary attrition
     quarter_lookup = {q: months for q, months in QUARTER_MONTHS.items()}
@@ -1408,7 +1654,7 @@ with tabs[0]:
 # 2. ATTRITION
 # ============================================================
 with tabs[1]:
-    st.subheader("Attrition")
+    st.markdown("## Attrition")
 
     # Quarterly attrition uses voluntary exits only and is annualized:
     # (voluntary exits / average monthly headcount) * (365/90)
@@ -1701,7 +1947,7 @@ with tabs[1]:
 # 3. EMPLOYEE LISTENING
 # ============================================================
 with tabs[2]:
-    st.subheader("Employee Listening")
+    st.markdown("## Employee Listening")
 
     sat = survey_mean(filtered, "satisfaction")
     part = participation(filtered)
@@ -1864,7 +2110,7 @@ with tabs[2]:
 # 4. TALENT
 # ============================================================
 with tabs[3]:
-    st.subheader("Talent")
+    st.markdown("## Talent")
 
     latest = filtered_non_time[
         filtered_non_time["month"] == period_end
@@ -2031,7 +2277,7 @@ with tabs[3]:
 # 5. MANAGER EFFECTIVENESS
 # ============================================================
 with tabs[4]:
-    st.subheader("Manager Effectiveness")
+    st.markdown("## Manager Effectiveness")
 
     manager_rows = []
 
