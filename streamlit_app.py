@@ -49,14 +49,19 @@ st.markdown("""
     color:var(--ink);
 }
 .block-container{
-    padding-top:0.8rem;
+    padding-top:2.6rem;
     padding-bottom:3rem;
     max-width:1500px;
 }
 
 /* Hide some default Streamlit chrome spacing, while keeping Share/menu controls usable */
 header[data-testid="stHeader"]{
-    background:rgba(246,248,251,.92);
+    background:rgba(246,248,251,.96);
+}
+
+/* Keep the first dashboard card below Streamlit's fixed app toolbar */
+div[data-testid="stMainBlockContainer"]{
+    padding-top:2.6rem !important;
 }
 
 /* Sidebar */
@@ -112,8 +117,8 @@ section[data-testid="stSidebar"] svg{
     background:#FFFFFF;
     border:1px solid var(--line);
     border-radius:12px;
-    padding:10px 14px;
-    margin:0 0 8px 0;
+    padding:8px 14px;
+    margin:0 0 7px 0;
     box-shadow:0 1px 3px rgba(20,37,61,.04);
     display:flex;
     align-items:center;
