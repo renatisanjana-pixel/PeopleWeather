@@ -524,10 +524,12 @@ def generate_data():
         pd.Timestamp("2026-04-01"): 4,
         pd.Timestamp("2026-05-01"): 4,
         pd.Timestamp("2026-06-01"): 4,
-        # Q2FY27 - back to normal
-        pd.Timestamp("2026-07-01"): 5,
-        pd.Timestamp("2026-08-01"): 5,
-        pd.Timestamp("2026-09-01"): 5,
+        # Q2FY27 - back to normal (~7% annualized voluntary attrition)
+        # Jul contains the quarter's single involuntary exit, leaving
+        # approximately 9 voluntary exits across the quarter.
+        pd.Timestamp("2026-07-01"): 4,
+        pd.Timestamp("2026-08-01"): 3,
+        pd.Timestamp("2026-09-01"): 3,
         # Q3FY27 - rises again
         pd.Timestamp("2026-10-01"): 8,
         pd.Timestamp("2026-11-01"): 9,
@@ -1001,12 +1003,23 @@ with tabs[0]:
     joiners = int(filtered["join_event"].sum())
 
     # Exit Pipeline is summed across selected months.
-    monthly_pipeline = (
-        filtered.groupby("month")["exit_pipeline_flag"].sum()
-    )
-    exit_pipeline = int(monthly_pipeline.sum()) if len(monthly_pipeline) else 0
+    # Keep it deliberately lean: ~1.6%-2.2% of monthly HC, so a
+    # three-month quarter generally lands around 5%-7% of average HC.
+    pipeline_monthly_values = []
+    for month in period_months:
+        month_slice = filtered_non_time[filtered_non_time["month"] == month]
+        month_hc = headcount(month_slice)
+        if month_hc:
+            # Slight variation by month and selected cut.
+            month_rate = 0.018
+            if month.month in [10, 11, 12, 1, 2, 3]:
+                month_rate += 0.003
+            pipeline_monthly_values.append(round(month_hc * month_rate))
+    exit_pipeline = int(sum(pipeline_monthly_values)) if pipeline_monthly_values else 0
 
     # Open Roles are also summed across selected months.
+    # They are kept close to expected replacement / growth demand rather than
+    # a large percentage of the whole organisation.
     monthly_open_roles = []
     for month in period_months:
         month_slice = filtered_non_time[filtered_non_time["month"] == month]
@@ -1019,11 +1032,11 @@ with tabs[0]:
         )
         if month_hc:
             suggested = max(
-                round(month_hc * 0.05),
-                month_vol_exits + round(month_hc * 0.02)
+                month_vol_exits + 2,
+                round(month_hc * 0.025)
             )
             monthly_open_roles.append(
-                min(round(month_hc * 0.10), max(round(month_hc * 0.03), suggested))
+                min(round(month_hc * 0.04), suggested)
             )
     open_roles = int(sum(monthly_open_roles)) if monthly_open_roles else 0
 
@@ -1055,17 +1068,53 @@ with tabs[0]:
     row1[0].metric(
         "Portfolio at Risk",
         f"₹{biz['portfolio_risk_cr']:.1f} Cr",
-        help="Synthetic merchant portfolio value associated with elevated aggregate people-risk signals in the latest month of the selected view."
+        help=(
+            "Synthetic merchant portfolio value supported by cohorts with elevated "
+            "people-risk signals. This is a cohort-level exposure indicator, not an "
+            "individual resignation prediction."
+        )
     )
     row1[1].metric(
         "Support SLA",
-        "N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%"
+        "N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%",
+        help=(
+            "Share of support interactions resolved within the synthetic service-level "
+            "target for the latest month in the selected view."
+        )
     )
-    row1[2].metric("Ticket Backlog", f"{biz['support_backlog']:,}")
+    row1[2].metric(
+        "Ticket Backlog",
+        f"{biz['support_backlog']:,}",
+        help=(
+            "Synthetic unresolved support-ticket volume carried by the Support population "
+            "in the latest month of the selected view."
+        )
+    )
 
-    row2[0].metric("Uncovered Accounts", f"{biz['uncovered_accounts']:,}")
-    row2[1].metric("Renewal Risk (90d)", f"₹{biz['renewal_risk_cr']:.1f} Cr")
-    row2[2].metric("Ramp to Output", f"{biz['median_ramp_days']:.0f} days")
+    row2[0].metric(
+        "Uncovered Accounts",
+        f"{biz['uncovered_accounts']:,}",
+        help=(
+            "Merchant accounts with elevated continuity risk because the owning cohort is "
+            "in the exit pipeline or does not have backup coverage."
+        )
+    )
+    row2[1].metric(
+        "Renewal Risk (90d)",
+        f"₹{biz['renewal_risk_cr']:.1f} Cr",
+        help=(
+            "Synthetic merchant portfolio value with a renewal due in the next 90 days "
+            "where backup ownership is not currently identified."
+        )
+    )
+    row2[2].metric(
+        "Ramp to Output",
+        f"{biz['median_ramp_days']:.0f} days",
+        help=(
+            "Median synthetic time for a new Customer Success hire to reach independent "
+            "portfolio ownership / expected productivity."
+        )
+    )
 
     st.caption(
         "Business metrics are synthetic and shown only at aggregated cohort level. "
@@ -1323,6 +1372,95 @@ with tabs[1]:
     c1.metric("Annualized Voluntary Attrition", pct(selected_annualized, 1))
     c2.metric("Voluntary Exits", selected_vol_exits)
     c3.metric("Involuntary Exits", selected_invol_exits)
+
+    # Dynamic AI summary for the selected attrition period.
+    voluntary_by_manager = (
+        filtered[
+            (filtered["exit_event"] == 1) &
+            (filtered["exit_type"] == "Voluntary")
+        ]
+        .groupby("manager")
+        .size()
+        .sort_values(ascending=False)
+    )
+
+    involuntary_by_manager = (
+        filtered[
+            (filtered["exit_event"] == 1) &
+            (filtered["exit_type"] == "Involuntary")
+        ]
+        .groupby("manager")
+        .size()
+        .sort_values(ascending=False)
+    )
+
+    top_vol_manager = voluntary_by_manager.index[0] if len(voluntary_by_manager) else "None"
+    top_vol_count = int(voluntary_by_manager.iloc[0]) if len(voluntary_by_manager) else 0
+
+    top_invol_manager = involuntary_by_manager.index[0] if len(involuntary_by_manager) else "None"
+    top_invol_count = int(involuntary_by_manager.iloc[0]) if len(involuntary_by_manager) else 0
+
+    reason_counts = (
+        filtered[
+            (filtered["exit_event"] == 1) &
+            (filtered["exit_type"] == "Voluntary")
+        ]["exit_reason"]
+        .value_counts()
+    )
+    top_reasons = reason_counts.head(2).index.tolist()
+
+    retention_actions = {
+        "Better salary": (
+            "run targeted pay-positioning checks for critical / high-performing cohorts, "
+            "use selective market corrections where warranted, and strengthen the total-rewards story"
+        ),
+        "Taking time off for personal/medical reasons": (
+            "explore leave flexibility, short career breaks, phased returns and manager-led workload adjustments"
+        ),
+        "Onsite opportunity": (
+            "increase visibility of onsite rotations, cross-geo assignments and transparent eligibility criteria"
+        ),
+        "Better benefits package": (
+            "benchmark the benefits proposition and improve communication of high-value benefits employees may be underusing"
+        ),
+        "Pursuing passion outside of corporate": (
+            "use stay conversations to identify employees seeking different work models, internal gigs or reduced schedules"
+        ),
+        "Long Work Hours": (
+            "review staffing, account load and peak-period rosters; rebalance work before retention conversations become purely compensation-led"
+        ),
+        "Culture Mismatch": (
+            "run targeted listening with affected teams, strengthen manager expectations and address recurring local culture themes"
+        ),
+    }
+
+    if top_reasons:
+        reason_action_text = "<br>".join([
+            f"• <b>{reason}:</b> {retention_actions.get(reason, 'run targeted stay interviews and validate the underlying driver')}."
+            for reason in top_reasons
+        ])
+    else:
+        reason_action_text = "• No material voluntary-exit reason is available for this cut."
+
+    involuntary_text = (
+        f"<b>{top_invol_manager}</b> has the most involuntary exits ({top_invol_count})."
+        if top_invol_count > 0
+        else "There are no involuntary exits in the selected period."
+    )
+
+    st.markdown(
+        f"""
+        <div class="ai-watch">
+        <b>AI attrition summary</b><br>
+        <b>{top_vol_manager}</b> has the most voluntary exits ({top_vol_count}) in the selected period.
+        {involuntary_text}
+        <br><br>
+        <b>Retention priorities based on the leading voluntary exit reasons:</b><br>
+        {reason_action_text}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     exit_business = filtered[
         (filtered["exit_event"] == 1) &
