@@ -585,6 +585,136 @@ def generate_data():
                 )
             panel.loc[idx, "exit_reason"] = reason
 
+
+    # --------------------------------------------------------
+    # SYNTHETIC CUSTOMER / BUSINESS METRICS
+    # --------------------------------------------------------
+    # These are intentionally aggregated in the dashboard. No employee-level
+    # business ownership table is ever displayed.
+
+    division_portfolio = {
+        "Enterprise CS": (0.22, 0.62),
+        "Mid-Market CS": (0.09, 0.28),
+        "SMB CS": (0.025, 0.09),
+        "Customer Support": (0.0, 0.0),
+        "CS Operations": (0.0, 0.0),
+    }
+
+    division_accounts = {
+        "Enterprise CS": (6, 16),
+        "Mid-Market CS": (14, 30),
+        "SMB CS": (28, 58),
+        "Customer Support": (0, 0),
+        "CS Operations": (0, 0),
+    }
+
+    portfolio_vals = []
+    account_vals = []
+    renewal_vals = []
+    backup_vals = []
+    sla_vals = []
+    backlog_vals = []
+    retention_vals = []
+    customer_outcome_vals = []
+
+    for _, r in panel.iterrows():
+        div = r["division"]
+
+        p_low, p_high = division_portfolio[div]
+        if p_high > 0:
+            portfolio = rng.uniform(p_low, p_high)
+            if r["job_level"] == "L4":
+                portfolio *= 1.25
+            elif r["job_level"] == "L3":
+                portfolio *= 1.10
+        else:
+            portfolio = 0.0
+
+        a_low, a_high = division_accounts[div]
+        accounts = int(rng.integers(a_low, a_high + 1)) if a_high > 0 else 0
+
+        # 90-day renewal value is a subset of the owned portfolio.
+        renewal_due = portfolio * rng.uniform(0.16, 0.34) if portfolio > 0 else 0.0
+
+        backup_prob = 0.79
+        if div == "Enterprise CS":
+            backup_prob -= 0.08
+        if r["talent"] == "Top Talent":
+            backup_prob -= 0.06
+        backup = bool(rng.random() < np.clip(backup_prob, 0.55, 0.90))
+
+        # Support SLA / backlog react to people-health conditions.
+        if div == "Customer Support":
+            sla = (
+                96
+                - max(0, 72 - r["team_pulse"]) * 0.20
+                - max(0, r["flight_risk"] - 5) * 0.65
+            )
+            if r["manager"] == "Rafee":
+                sla -= 3.0
+            if r["month"].month in [10, 11, 12, 3]:
+                sla -= 2.0
+            sla = float(np.clip(sla + rng.normal(0, 1.2), 78, 99))
+
+            backlog = int(
+                np.clip(
+                    rng.normal(10, 2.5) + max(0, 92 - sla) * 0.9,
+                    4,
+                    26
+                )
+            )
+        else:
+            sla = np.nan
+            backlog = 0
+
+        # Simple synthetic merchant-retention outcome for account-owning teams.
+        if portfolio > 0:
+            retention = (
+                96
+                + (r["team_pulse"] - 72) * 0.08
+                - r["flight_risk"] * 0.20
+                + rng.normal(0, 0.8)
+            )
+            retention = float(np.clip(retention, 86, 99))
+        else:
+            retention = np.nan
+
+        # A cross-team customer outcome index used only for aggregated
+        # People -> Business analysis. It is not presented as causal.
+        if div == "Customer Support":
+            customer_outcome = sla
+        elif portfolio > 0:
+            customer_outcome = retention
+        else:
+            customer_outcome = float(
+                np.clip(91 + (r["team_pulse"] - 72) * 0.10 + rng.normal(0, 1), 84, 98)
+            )
+
+        portfolio_vals.append(portfolio)
+        account_vals.append(accounts)
+        renewal_vals.append(renewal_due)
+        backup_vals.append(backup)
+        sla_vals.append(sla)
+        backlog_vals.append(backlog)
+        retention_vals.append(retention)
+        customer_outcome_vals.append(customer_outcome)
+
+    panel["merchant_portfolio_cr"] = portfolio_vals
+    panel["accounts_owned"] = account_vals
+    panel["renewal_due_90d_cr"] = renewal_vals
+    panel["backup_covered"] = backup_vals
+    panel["sla_adherence"] = sla_vals
+    panel["backlog_tickets"] = backlog_vals
+    panel["merchant_retention"] = retention_vals
+    panel["customer_outcome_index"] = customer_outcome_vals
+
+    # New-hire ramp assumption for the prototype.
+    panel["ramp_days"] = np.where(
+        panel["join_event"],
+        np.clip(rng.normal(78, 8, len(panel)).round(), 60, 95),
+        np.nan
+    )
+
     role_base = {
         "Enterprise CS": 14,
         "Mid-Market CS": 10,
@@ -634,6 +764,59 @@ def pct(v, decimals=0):
     if pd.isna(v):
         return "🔒"
     return f"{v:.{decimals}f}%"
+
+
+def business_metrics(data):
+    """Return aggregated business-impact metrics for the selected cut."""
+    if data.empty:
+        return {
+            "portfolio_risk_cr": 0.0,
+            "support_sla": np.nan,
+            "support_backlog": 0,
+            "uncovered_accounts": 0,
+            "renewal_risk_cr": 0.0,
+            "median_ramp_days": np.nan,
+        }
+
+    # Elevated people risk is deliberately cohort-level: flight-risk signal
+    # OR exit-pipeline flag. No individual prediction is displayed.
+    at_risk = data[
+        (data["flight_risk"] >= 7) |
+        (data["exit_pipeline_flag"])
+    ]
+
+    portfolio_risk_cr = at_risk["merchant_portfolio_cr"].sum()
+
+    support = data[data["division"] == "Customer Support"]
+    support_sla = support["sla_adherence"].mean() if len(support) else np.nan
+    support_backlog = int(support["backlog_tickets"].sum()) if len(support) else 0
+
+    uncovered = data[
+        (data["accounts_owned"] > 0) &
+        (
+            (data["exit_pipeline_flag"]) |
+            (~data["backup_covered"])
+        )
+    ]
+    uncovered_accounts = int(uncovered["accounts_owned"].sum())
+
+    renewal_risk_cr = data.loc[
+        (data["renewal_due_90d_cr"] > 0) &
+        (~data["backup_covered"]),
+        "renewal_due_90d_cr"
+    ].sum()
+
+    ramp = data.loc[data["join_event"], "ramp_days"].dropna()
+    median_ramp_days = float(ramp.median()) if len(ramp) else 78.0
+
+    return {
+        "portfolio_risk_cr": portfolio_risk_cr,
+        "support_sla": support_sla,
+        "support_backlog": support_backlog,
+        "uncovered_accounts": uncovered_accounts,
+        "renewal_risk_cr": renewal_risk_cr,
+        "median_ramp_days": median_ramp_days,
+    }
 
 def tidy_percent_axis(fig, max_y=100, dtick=10):
     fig.update_yaxes(
@@ -847,7 +1030,34 @@ with tabs[0]:
 
     st.caption(
         "For multi-month or quarterly views: Headcount is the average monthly headcount; "
-        "Headcount is the average monthly headcount; Joiners, Exit Pipeline and Open Roles are summed across the selected months; Internal Moves remain modest at roughly 10–20 per quarter."
+        "Joiners, Exit Pipeline and Open Roles are summed across the selected months; Internal Moves remain modest at roughly 10–20 per quarter."
+    )
+
+    # --------------------------------------------------------
+    # PEOPLE -> BUSINESS IMPACT
+    # --------------------------------------------------------
+    biz = business_metrics(filtered)
+
+    st.markdown("### Customer & business impact")
+    b1, b2, b3, b4, b5, b6 = st.columns(6)
+
+    b1.metric(
+        "Portfolio at Risk",
+        f"₹{biz['portfolio_risk_cr']:.1f} Cr",
+        help="Synthetic merchant portfolio value associated with elevated aggregate people-risk signals."
+    )
+    b2.metric(
+        "Support SLA",
+        "N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%"
+    )
+    b3.metric("Support Backlog", f"{biz['support_backlog']:,}")
+    b4.metric("Uncovered Accounts", f"{biz['uncovered_accounts']:,}")
+    b5.metric("90d Renewal Risk", f"₹{biz['renewal_risk_cr']:.1f} Cr")
+    b6.metric("Ramp to Output", f"{biz['median_ramp_days']:.0f} days")
+
+    st.caption(
+        "Business metrics are synthetic and shown only at aggregated cohort level. "
+        "Portfolio at Risk is not a prediction of individual resignation."
     )
 
     latest_selected_month = max(period_months)
@@ -1015,6 +1225,7 @@ with tabs[0]:
         <div class="ai-good">
         <b>People signal</b><br>
         {pulse_summary}{top_bottom_summary}
+        <br><br><b>Business context:</b> the selected population carries ₹{biz['portfolio_risk_cr']:.1f} Cr of merchant portfolio under elevated people-risk signals, with ₹{biz['renewal_risk_cr']:.1f} Cr of 90-day renewals lacking backup coverage.
         <br><br><b>Suggested action:</b> reinforce the practices behind the strongest themes and use targeted listening on the bottom two themes before choosing an intervention.
         </div>
         """,
@@ -1027,7 +1238,8 @@ with tabs[0]:
         <b>Attrition signal</b><br>
         {attrition_summary}<br>
         Top voluntary exit reasons in the selected period: <b>{reason_text}</b>.
-        <br><br><b>Suggested action:</b> prioritise retention actions against the leading exit reasons and the teams where voluntary attrition has moved most sharply.
+        <br><br><b>Business context:</b> {biz['uncovered_accounts']:,} merchant accounts have elevated coverage risk in this cut. Support SLA is {"N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%"} with a synthetic backlog of {biz['support_backlog']:,} tickets.
+        <br><br><b>Suggested action:</b> prioritise retention actions against the leading exit reasons, rebalance exposed merchant portfolios and establish backup ownership for near-term renewals.
         </div>
         """,
         unsafe_allow_html=True
@@ -1099,6 +1311,26 @@ with tabs[1]:
     c1.metric("Annualized Voluntary Attrition", pct(selected_annualized, 1))
     c2.metric("Voluntary Exits", selected_vol_exits)
     c3.metric("Involuntary Exits", selected_invol_exits)
+
+    exit_business = filtered[
+        (filtered["exit_event"] == 1) &
+        (filtered["exit_type"] == "Voluntary")
+    ]
+    portfolio_reassigned = exit_business["merchant_portfolio_cr"].sum()
+    accounts_reassigned = int(exit_business["accounts_owned"].sum())
+
+    if selected_vol_exits > 0:
+        st.markdown(
+            f"""
+            <div class="ai-watch">
+            <b>Customer continuity impact</b><br>
+            Voluntary exits in the selected period are associated with approximately
+            <b>₹{portfolio_reassigned:.1f} Cr</b> of merchant portfolio and
+            <b>{accounts_reassigned:,}</b> merchant accounts requiring continuity planning or reassignment.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     if len(quarterly_rates):
         max_q = max(5, int(np.ceil(quarterly_rates["Attrition %"].max() / 5.0) * 5 + 5))
@@ -1399,6 +1631,20 @@ with tabs[3]:
         "Internal movement is deliberately modest at roughly 10–20 moves per quarter."
     )
 
+    talent_biz = business_metrics(latest)
+
+    st.markdown(
+        f"""
+        <div class="ai-watch">
+        <b>Business continuity lens</b><br>
+        <b>₹{talent_biz['renewal_risk_cr']:.1f} Cr</b> of 90-day renewal value currently lacks backup coverage,
+        while <b>₹{talent_biz['portfolio_risk_cr']:.1f} Cr</b> of merchant portfolio sits in cohorts with elevated people-risk signals.
+        <br><br><b>HRBP action:</b> prioritise backup ownership and succession conversations for critical merchant portfolios before broad-based retention activity.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     # Smaller charts
     left, right = st.columns(2)
 
@@ -1440,7 +1686,7 @@ with tabs[3]:
             x="Movement",
             y="Count",
             text="Count",
-            title="Internal mobility • ~8% of headcount"
+            title="Internal mobility • selected period"
         )
         fig.update_traces(textposition="outside", cliponaxis=False)
         fig.update_layout(height=260, margin=dict(l=15, r=15, t=50, b=25))
@@ -1636,9 +1882,63 @@ with tabs[4]:
             unsafe_allow_html=True
         )
 
+    # --------------------------------------------------------
+    # PEOPLE -> BUSINESS RELATIONSHIP
+    # --------------------------------------------------------
+    relationship_rows = []
+    for _, mgr_row in mgr_df.iterrows():
+        mgr_name = mgr_row["Manager"]
+        g = filtered[filtered["manager"] == mgr_name]
+
+        if g.empty or pd.isna(mgr_row[metric_choice]):
+            continue
+
+        customer_outcome = g["customer_outcome_index"].mean()
+
+        relationship_rows.append({
+            "Manager": mgr_name,
+            "People Metric": mgr_row[metric_choice],
+            "Customer Outcome": customer_outcome,
+            "HC": headcount(g)
+        })
+
+    relationship_df = pd.DataFrame(relationship_rows)
+
+    if len(relationship_df) >= 2:
+        st.markdown("### People → business")
+        fig = px.scatter(
+            relationship_df,
+            x="People Metric",
+            y="Customer Outcome",
+            size="HC",
+            text="Manager",
+            title=f"{metric_choice} vs customer outcome"
+        )
+        fig.update_traces(textposition="top center")
+        fig.update_xaxes(
+            range=[45, 100],
+            ticksuffix="%",
+            title=metric_choice
+        )
+        fig.update_yaxes(
+            range=[80, 100],
+            ticksuffix="%",
+            title="Customer outcome index"
+        )
+        fig.update_layout(
+            height=290,
+            margin=dict(l=20, r=20, t=50, b=30)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.caption(
+            "Synthetic association only. The chart does not establish that manager behaviour causes the business outcome; "
+            "staffing, workload, seasonality and merchant mix may also contribute."
+        )
+
 
 st.divider()
 st.caption(
     "People Pulse prototype • Synthetic Customer Success data • ~500 active employees per month • "
-    "No individual employee records or comments displayed."
+    "No individual employee records, merchant ownership records or comments displayed."
 )
