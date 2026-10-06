@@ -842,6 +842,17 @@ def business_metrics(data):
         "renewal_due_90d_cr"
     ].sum() * quarter_risk_multiplier
 
+    # Backup coverage metrics for a visual progress tracker.
+    total_accounts = int(latest_slice["accounts_owned"].sum())
+    covered_accounts = int(
+        latest_slice.loc[latest_slice["backup_covered"], "accounts_owned"].sum()
+    )
+    total_renewal_book_cr = float(latest_slice["renewal_due_90d_cr"].sum() * quarter_risk_multiplier)
+    covered_renewal_book_cr = float(
+        latest_slice.loc[latest_slice["backup_covered"], "renewal_due_90d_cr"].sum()
+        * quarter_risk_multiplier
+    )
+
     ramp = data.loc[data["join_event"], "ramp_days"].dropna()
     median_ramp_days = float(ramp.median()) if len(ramp) else 78.0
 
@@ -852,7 +863,31 @@ def business_metrics(data):
         "uncovered_accounts": uncovered_accounts,
         "renewal_risk_cr": renewal_risk_cr,
         "median_ramp_days": median_ramp_days,
+        "total_accounts": total_accounts,
+        "covered_accounts": covered_accounts,
+        "total_renewal_book_cr": total_renewal_book_cr,
+        "covered_renewal_book_cr": covered_renewal_book_cr,
     }
+
+def backup_progress_html(title, covered_pct, left_label, right_label):
+    covered_pct = float(max(0, min(100, covered_pct)))
+    uncovered_pct = 100 - covered_pct
+    return f"""
+    <div style="margin-top: 0.3rem; margin-bottom: 1rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <div style="font-weight:600; color:#1f2937;">{title}</div>
+            <div style="font-size:0.95rem; font-weight:700; color:#111827;">{covered_pct:.0f}% covered</div>
+        </div>
+        <div style="display:flex; width:100%; height:18px; border-radius:999px; overflow:hidden; background:#e5e7eb;">
+            <div style="width:{covered_pct:.2f}%; background:#22c55e;"></div>
+            <div style="width:{uncovered_pct:.2f}%; background:#ef4444;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.35rem; font-size:0.9rem;">
+            <div style="color:#166534;"><b>{left_label}</b></div>
+            <div style="color:#991b1b;"><b>{right_label}</b></div>
+        </div>
+    </div>
+    """
 
 def tidy_percent_axis(fig, max_y=100, dtick=10):
     fig.update_yaxes(
@@ -1144,6 +1179,39 @@ with tabs[0]:
         "Business metrics are synthetic and shown only at aggregated cohort level. "
         "Portfolio at Risk is not a prediction of individual resignation."
     )
+
+    st.markdown("#### Backup coverage action tracker")
+    accounts_total = max(1, biz["total_accounts"])
+    accounts_covered = min(biz["covered_accounts"], accounts_total)
+    accounts_uncovered = max(0, accounts_total - accounts_covered)
+    accounts_cov_pct = 100 * accounts_covered / accounts_total
+
+    renewal_total = max(0.01, biz["total_renewal_book_cr"])
+    renewal_covered = min(biz["covered_renewal_book_cr"], renewal_total)
+    renewal_uncovered = max(0.0, renewal_total - renewal_covered)
+    renewal_cov_pct = 100 * renewal_covered / renewal_total
+
+    bp1, bp2 = st.columns(2)
+    with bp1:
+        st.markdown(
+            backup_progress_html(
+                "Accounts with backup mapped",
+                accounts_cov_pct,
+                f"{accounts_covered:,} covered",
+                f"{accounts_uncovered:,} remaining",
+            ),
+            unsafe_allow_html=True
+        )
+    with bp2:
+        st.markdown(
+            backup_progress_html(
+                "90-day renewal value with backup mapped",
+                renewal_cov_pct,
+                f"₹{renewal_covered:.1f} Cr covered",
+                f"₹{renewal_uncovered:.1f} Cr remaining",
+            ),
+            unsafe_allow_html=True
+        )
 
     latest_selected_month = max(period_months)
 
