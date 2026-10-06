@@ -344,11 +344,11 @@ def generate_data():
             # Participation deliberately varies widely across teams while
             # averaging close to 56% overall.
             manager_participation = {
-                "Anuj": 0.90,
-                "Cassie": 0.68,
+                "Anuj": 0.78,
+                "Cassie": 0.58,
                 "Rafee": 0.04,
-                "Priya": 0.62,
-                "Zainab": 0.56,
+                "Priya": 0.54,
+                "Zainab": 0.46,
             }
             monthly_participation_shift = [
                 -0.03, 0.02, 0.00, 0.03, -0.02, 0.01, -0.01,
@@ -745,10 +745,12 @@ st.sidebar.caption(
 month_options = sorted(df["month"].unique(), reverse=True)
 quarter_options = list(QUARTER_MONTHS.keys())[::-1]  # recent quarter first
 
-sel_quarters = compact_multiselect(
+sel_quarters = st.sidebar.multiselect(
     "Quarter",
-    quarter_options,
-    key="quarter_filter"
+    options=quarter_options,
+    default=["Q2FY27"],
+    key="quarter_filter",
+    placeholder="All"
 )
 
 sel_months = compact_multiselect(
@@ -805,33 +807,36 @@ with tabs[0]:
 
     joiners = int(filtered["join_event"].sum())
 
-    # Exit Pipeline and Open Roles are point-in-time style metrics.
-    # For multi-month periods we show the average monthly position so they
-    # stay within sensible percentages of headcount.
+    # Exit Pipeline is summed across selected months.
     monthly_pipeline = (
         filtered.groupby("month")["exit_pipeline_flag"].sum()
     )
-    exit_pipeline = int(round(monthly_pipeline.mean())) if len(monthly_pipeline) else 0
+    exit_pipeline = int(monthly_pipeline.sum()) if len(monthly_pipeline) else 0
 
-    # Open roles scale to 3%-10% of the selected cohort and stay slightly
-    # above monthly exits on average.
+    # Open Roles are also summed across selected months.
     monthly_open_roles = []
     for month in period_months:
         month_slice = filtered_non_time[filtered_non_time["month"] == month]
         month_hc = headcount(month_slice)
-        month_exits = int(month_slice["exit_event"].sum())
+        month_vol_exits = int(
+            month_slice[
+                (month_slice["exit_event"] == 1) &
+                (month_slice["exit_type"] == "Voluntary")
+            ].shape[0]
+        )
         if month_hc:
             suggested = max(
                 round(month_hc * 0.05),
-                month_exits + round(month_hc * 0.025)
+                month_vol_exits + round(month_hc * 0.02)
             )
             monthly_open_roles.append(
                 min(round(month_hc * 0.10), max(round(month_hc * 0.03), suggested))
             )
-    open_roles = int(round(np.mean(monthly_open_roles))) if monthly_open_roles else 0
+    open_roles = int(sum(monthly_open_roles)) if monthly_open_roles else 0
 
-    # Internal movement is intentionally held around 8% of headcount.
-    internal_moves = int(round(avg_hc * 0.08))
+    # Internal movement is intentionally modest: roughly 10–20 moves per quarter.
+    # Scale by selected months, capped to keep the demo realistic.
+    internal_moves = int(np.clip(round(5 * len(period_months)), 4, 20))
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Avg Headcount", f"{avg_hc:.0f}")
@@ -842,26 +847,15 @@ with tabs[0]:
 
     st.caption(
         "For multi-month or quarterly views: Headcount is the average monthly headcount; "
-        "Joiners are summed across the selected months; Exit Pipeline and Open Roles are average monthly positions; Internal Moves is shown at ~8% of average headcount."
+        "Headcount is the average monthly headcount; Joiners, Exit Pipeline and Open Roles are summed across the selected months; Internal Moves remain modest at roughly 10–20 per quarter."
     )
 
     latest_selected_month = max(period_months)
 
-    # Gender mix uses the latest month in the selected period.
+    # Snapshot charts use the latest month in the selected period.
+    latest_selected_month = max(period_months)
     latest_snapshot = filtered_non_time[
         filtered_non_time["month"] == latest_selected_month
-    ].copy()
-
-    # Headcount trend ALWAYS shows six months ending in selected/latest month.
-    six_month_window = list(
-        pd.date_range(
-            end=pd.Timestamp(latest_selected_month),
-            periods=6,
-            freq="MS"
-        )
-    )
-    hc_trend_data = filtered_non_time[
-        filtered_non_time["month"].isin(six_month_window)
     ].copy()
 
     left, right = st.columns(2)
@@ -886,96 +880,156 @@ with tabs[0]:
             texttemplate="%{percent:.0%}"
         )
         fig.update_layout(
+            height=250,
             legend_title_text="",
-            margin=dict(l=15, r=15, t=55, b=15)
+            margin=dict(l=10, r=10, t=45, b=5)
         )
         st.plotly_chart(fig, use_container_width=True)
 
     with right:
-        trend = (
-            hc_trend_data.groupby("month")["employee_id"]
-            .nunique()
-            .reindex(six_month_window)
-            .reset_index()
+        division_counts = (
+            latest_snapshot.drop_duplicates("employee_id")["division"]
+            .value_counts()
+            .rename_axis("Division")
+            .reset_index(name="Headcount")
+            .sort_values("Headcount", ascending=False)
         )
-        trend.columns = ["Month", "Headcount"]
-        trend["Month Label"] = trend["Month"].dt.strftime("%b %Y")
 
-        fig = px.line(
-            trend,
-            x="Month Label",
+        fig = px.bar(
+            division_counts,
+            x="Division",
             y="Headcount",
-            markers=True,
             text="Headcount",
-            title="Headcount trend • recent 6 months"
+            title=f"Headcount by division • {pd.Timestamp(latest_selected_month).strftime('%b %Y')}"
         )
-        fig.update_traces(textposition="top center")
-        fig.update_xaxes(
-            title=None,
-            type="category"
-        )
-        fig.update_yaxes(title="Headcount")
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_xaxes(title=None, tickangle=-20)
+        fig.update_yaxes(title=None)
         fig.update_layout(
-            margin=dict(l=20, r=20, t=55, b=35)
+            height=250,
+            margin=dict(l=10, r=10, t=45, b=40)
         )
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("### AI summaries")
 
-    positive_points = []
-    watch_points = []
+    # Current quarter comparison for voluntary attrition
+    quarter_lookup = {q: months for q, months in QUARTER_MONTHS.items()}
+    quarter_names = list(QUARTER_MONTHS.keys())
 
-    move_rate = internal_moves / max(avg_hc, 1) * 100
-    pipeline_rate = exit_pipeline / max(avg_hc, 1) * 100
-    pulse_participation = participation(filtered)
+    # Determine the latest quarter represented by current period
+    current_q = None
+    for qname, qmonths in QUARTER_MONTHS.items():
+        if period_end in qmonths:
+            current_q = qname
+            break
 
-    if move_rate >= 8:
-        positive_points.append(
-            f"Internal movement is active at roughly {move_rate:.0f}% of average headcount across the selected period."
-        )
-    if joiners >= 25:
-        positive_points.append(
-            f"Hiring momentum is healthy with {joiners} joiners across the selected period."
-        )
-    if open_roles / max(len(period_months), 1) <= 50:
-        positive_points.append(
-            "Average monthly open roles are at a manageable level."
-        )
+    previous_q = None
+    if current_q in quarter_names:
+        idx = quarter_names.index(current_q)
+        if idx > 0:
+            previous_q = quarter_names[idx - 1]
 
-    if pipeline_rate >= 8:
-        watch_points.append(
-            f"Exit pipeline volume is elevated relative to average headcount ({pipeline_rate:.0f}%)."
-        )
-    if open_roles >= avg_hc * 0.08:
-        watch_points.append(
-            "Open-role demand is elevated relative to current headcount and may create capacity pressure."
-        )
-    if joiners < 10 and len(period_months) >= 3:
-        watch_points.append(
-            "Joiner volume is relatively low for the selected multi-month period."
-        )
+    def voluntary_annualized_attrition(data, months):
+        period = data[data["month"].isin(months)].copy()
+        exits = period[
+            (period["exit_event"] == 1) &
+            (period["exit_type"] == "Voluntary")
+        ].shape[0]
+        avg_hc_local = period_headcount_average(data, months)
+        if not avg_hc_local:
+            return np.nan
+        if len(months) == 3:
+            factor = 365 / 90
+        else:
+            factor = 12 / max(len(months), 1)
+        return exits / avg_hc_local * factor * 100
 
-    if pulse_participation < 60:
-        watch_points.append(
-            f"Pulse participation is only {pulse_participation:.0f}%, which weakens confidence in listening insights."
-        )
+    attrition_summary = "Quarter-on-quarter voluntary attrition comparison is not available for this period."
+    if current_q and previous_q:
+        current_attr = voluntary_annualized_attrition(filtered_non_time, QUARTER_MONTHS[current_q])
+        previous_attr = voluntary_annualized_attrition(filtered_non_time, QUARTER_MONTHS[previous_q])
+        if not pd.isna(current_attr) and not pd.isna(previous_attr):
+            diff = current_attr - previous_attr
+            direction = "increased" if diff > 0 else "reduced"
+            attrition_summary = (
+                f"Annualized voluntary attrition {direction} by {abs(diff):.1f} pts "
+                f"from {previous_q} ({previous_attr:.1f}%) to {current_q} ({current_attr:.1f}%)."
+            )
 
-    if not positive_points:
-        positive_points.append("Workforce movement is broadly stable in the selected cut.")
-    if not watch_points:
-        watch_points.append("No major workforce pressure is visible in the selected cut.")
+    current_vol_reasons = (
+        filtered[
+            (filtered["exit_event"] == 1) &
+            (filtered["exit_type"] == "Voluntary")
+        ]["exit_reason"]
+        .value_counts()
+        .head(2)
+    )
+    reason_text = ", ".join(current_vol_reasons.index.tolist()) if len(current_vol_reasons) else "no material voluntary exit reason"
+
+    # Pulse/satisfaction comparison vs previous quarter
+    pulse_summary = "Pulse movement is broadly stable."
+    top_bottom_summary = ""
+
+    if current_q and previous_q:
+        current_q_data = apply_non_time_filters(df[df["month"].isin(QUARTER_MONTHS[current_q])])
+        previous_q_data = apply_non_time_filters(df[df["month"].isin(QUARTER_MONTHS[previous_q])])
+
+        current_pulse = survey_mean(current_q_data, "satisfaction")
+        previous_pulse = survey_mean(previous_q_data, "satisfaction")
+
+        if not pd.isna(current_pulse) and not pd.isna(previous_pulse):
+            pdiff = current_pulse - previous_pulse
+            if abs(pdiff) >= 0.5:
+                pdir = "increased" if pdiff > 0 else "decreased"
+                pulse_summary = (
+                    f"Pulse {pdir} by {abs(pdiff):.1f} pts "
+                    f"from {previous_q} to {current_q}."
+                )
+
+    theme_map_ai = {
+        "Manager": "theme_manager",
+        "Work": "theme_work",
+        "Team": "theme_team",
+        "Wellbeing": "theme_wellbeing",
+        "Culture": "theme_culture",
+        "Org Listening": "theme_org_listening",
+        "Learning": "theme_learning",
+        "Inclusivity": "theme_inclusivity",
+        "Innovation": "theme_innovation"
+    }
+    theme_scores = []
+    for theme_name, col in theme_map_ai.items():
+        score = survey_mean(filtered, col)
+        if not pd.isna(score):
+            theme_scores.append((theme_name, score))
+    theme_scores = sorted(theme_scores, key=lambda x: x[1], reverse=True)
+
+    if len(theme_scores) >= 4:
+        top2 = ", ".join([f"{n} ({v:.0f}%)" for n, v in theme_scores[:2]])
+        bottom2 = ", ".join([f"{n} ({v:.0f}%)" for n, v in theme_scores[-2:]])
+        top_bottom_summary = f" Top themes: {top2}. Bottom themes: {bottom2}."
 
     st.markdown(
-        '<div class="ai-good"><b>Positive signal</b><br>' +
-        "<br>".join([f"• {x}" for x in positive_points]) +
-        "<br><br><b>Suggested action:</b> protect internal mobility and direct hiring capacity toward the most constrained teams.</div>",
+        f"""
+        <div class="ai-good">
+        <b>People signal</b><br>
+        {pulse_summary}{top_bottom_summary}
+        <br><br><b>Suggested action:</b> reinforce the practices behind the strongest themes and use targeted listening on the bottom two themes before choosing an intervention.
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="ai-watch"><b>Watch-out</b><br>' +
-        "<br>".join([f"• {x}" for x in watch_points]) +
-        "<br><br><b>Suggested action:</b> use manager nudges, short reminders, leadership call-outs, protected survey time and visible close-the-loop actions to lift Pulse participation, while reviewing vacancies and exit pipeline in parallel.</div>",
+        f"""
+        <div class="ai-watch">
+        <b>Attrition signal</b><br>
+        {attrition_summary}<br>
+        Top voluntary exit reasons in the selected period: <b>{reason_text}</b>.
+        <br><br><b>Suggested action:</b> prioritise retention actions against the leading exit reasons and the teams where voluntary attrition has moved most sharply.
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
@@ -986,182 +1040,106 @@ with tabs[0]:
 with tabs[1]:
     st.subheader("Attrition")
 
-    monthly_attr = (
-        filtered.groupby("month")
-        .agg(
-            Exits=("exit_event", "sum"),
-            HC=("employee_id", "nunique")
-        )
-        .reset_index()
-        .sort_values("month")
-    )
-    monthly_attr["Attrition %"] = (
-        monthly_attr["Exits"] / monthly_attr["HC"] * 12 * 100
-    )
-    monthly_attr["Month Label"] = monthly_attr["month"].dt.strftime("%b %Y")
+    # Quarterly attrition uses voluntary exits only and is annualized:
+    # (voluntary exits / average monthly headcount) * (365/90)
+    quarterly_rows = []
 
-    max_monthly_attr = max(5, int(np.ceil(monthly_attr["Attrition %"].max() / 5.0) * 5 + 5))
+    for qname, qmonths in QUARTER_MONTHS.items():
+        qmonths_in_scope = [m for m in qmonths if m in filtered_non_time["month"].unique()]
+        if not qmonths_in_scope:
+            continue
 
-    fig = px.line(
-        monthly_attr,
-        x="Month Label",
-        y="Attrition %",
-        markers=True,
-        text="Attrition %",
-        title="Monthly attrition • annualized"
-    )
-    fig.update_traces(
-        texttemplate="%{text:.1f}%",
-        textposition="top center"
-    )
-    fig.update_xaxes(title=None, type="category")
-    fig.update_yaxes(
-        range=[0, max_monthly_attr],
-        tick0=0,
-        dtick=5,
-        ticksuffix="%",
-        title="Attrition"
-    )
-    fig.update_layout(height=250, margin=dict(l=20, r=20, t=45, b=20))
-    st.plotly_chart(fig, use_container_width=True)
+        qdata = filtered_non_time[filtered_non_time["month"].isin(qmonths_in_scope)]
+        voluntary_exits = qdata[
+            (qdata["exit_event"] == 1) &
+            (qdata["exit_type"] == "Voluntary")
+        ].shape[0]
+        avg_q_hc = period_headcount_average(filtered_non_time, qmonths_in_scope)
 
-    # Selected period attrition = exits / average monthly headcount.
-    selected_attrition = period_attrition(filtered_non_time, period_months)
+        if avg_q_hc:
+            attr_rate = voluntary_exits / avg_q_hc * (365 / 90) * 100
+            quarterly_rows.append({
+                "Quarter": qname,
+                "Attrition %": attr_rate,
+                "Voluntary Exits": voluntary_exits
+            })
 
-    # LTM attrition is trailing 12 months ending at the latest selected month.
-    ltm_months = list(
-        pd.date_range(
-            end=pd.Timestamp(period_end),
-            periods=12,
-            freq="MS"
-        )
-    )
-    ltm_attrition = period_attrition(filtered_non_time, ltm_months)
+    quarterly_rates = pd.DataFrame(quarterly_rows)
 
-    voluntary_count = int((filtered["exit_type"] == "Voluntary").sum())
-    involuntary_count = int((filtered["exit_type"] == "Involuntary").sum())
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Annualized Attrition", pct(selected_attrition, 1))
-    c2.metric("LTM Attrition", pct(ltm_attrition, 1))
-    c3.metric("Voluntary Exits", voluntary_count)
-    c4.metric("Involuntary Exits", involuntary_count)
-
-    q = filtered.copy()
-    q["Quarter"] = q["month"].map({
-        m: qname
-        for qname, qmonths in QUARTER_MONTHS.items()
-        for m in qmonths
-    })
-
-    quarterly = (
-        q.dropna(subset=["Quarter"])
-        .groupby("Quarter")
-        .agg(
-            Exits=("exit_event", "sum")
-        )
-        .reset_index()
-    )
-
-    q_hc_rows = []
-    for qname in quarterly["Quarter"]:
-        months_q = [m for m in QUARTER_MONTHS[qname] if m in filtered["month"].unique()]
-        avg_q_hc = period_headcount_average(filtered_non_time, months_q)
-        exits_q = quarterly.loc[quarterly["Quarter"] == qname, "Exits"].iloc[0]
-        q_hc_rows.append({
-            "Quarter": qname,
-            "Attrition %": exits_q / avg_q_hc * 100 if avg_q_hc else np.nan
-        })
-
-    quarterly_rates = pd.DataFrame(q_hc_rows)
+    # Keep quarter ordering consistent
     quarter_order = list(QUARTER_MONTHS.keys())
-    quarterly_rates["Quarter"] = pd.Categorical(
-        quarterly_rates["Quarter"],
-        categories=quarter_order,
-        ordered=True
-    )
-    quarterly_rates = quarterly_rates.sort_values("Quarter")
-
-    left, right = st.columns(2)
-
-    with left:
-        if len(quarterly_rates):
-            max_q = max(5, int(np.ceil(quarterly_rates["Attrition %"].max() / 5.0) * 5 + 5))
-            fig = px.bar(
-                quarterly_rates,
-                x="Quarter",
-                y="Attrition %",
-                text="Attrition %",
-                title="Quarterly attrition • annualized"
-            )
-            fig.update_traces(
-                texttemplate="%{text:.1f}%",
-                textposition="outside",
-                cliponaxis=False
-            )
-            fig.update_yaxes(
-                range=[0, max_q],
-                tick0=0,
-                dtick=5,
-                ticksuffix="%"
-            )
-            fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=25))
-            st.plotly_chart(fig, use_container_width=True)
-
-    with right:
-        mix = (
-            filtered[filtered["exit_event"] == 1]["exit_type"]
-            .value_counts()
-            .reset_index()
+    if len(quarterly_rates):
+        quarterly_rates["Quarter"] = pd.Categorical(
+            quarterly_rates["Quarter"],
+            categories=quarter_order,
+            ordered=True
         )
-        mix.columns = ["Type", "Count"]
+        quarterly_rates = quarterly_rates.sort_values("Quarter")
 
-        if len(mix):
-            fig = px.pie(
-                mix,
-                names="Type",
-                values="Count",
-                hole=0.55,
-                title="Voluntary vs involuntary"
-            )
-            fig.update_traces(
-                textinfo="label+percent",
-                textposition="inside"
-            )
-            fig.update_layout(
-                showlegend=False,
-                height=280,
-                margin=dict(l=15, r=15, t=50, b=10)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No exits in the selected cut.")
+    selected_vol_exits = filtered[
+        (filtered["exit_event"] == 1) &
+        (filtered["exit_type"] == "Voluntary")
+    ].shape[0]
+    selected_invol_exits = filtered[
+        (filtered["exit_event"] == 1) &
+        (filtered["exit_type"] == "Involuntary")
+    ].shape[0]
 
-    voluntary = (
-        filtered[
-            (filtered["exit_event"] == 1) &
-            (filtered["exit_type"] == "Voluntary")
-        ]["exit_reason"]
-        .value_counts()
-        .rename_axis("Reason")
-        .reset_index(name="Count")
-        .sort_values("Count", ascending=True)
+    selected_avg_hc = period_headcount_average(filtered_non_time, period_months)
+    selected_annualized = (
+        selected_vol_exits / selected_avg_hc * (365 / 90) * 100
+        if selected_avg_hc and len(period_months) == 3
+        else (
+            selected_vol_exits / selected_avg_hc * (12 / max(len(period_months), 1)) * 100
+            if selected_avg_hc else np.nan
+        )
     )
 
-    involuntary = (
-        filtered[
-            (filtered["exit_event"] == 1) &
-            (filtered["exit_type"] == "Involuntary")
-        ]["exit_reason"]
-        .value_counts()
-        .rename_axis("Reason")
-        .reset_index(name="Count")
-        .sort_values("Count", ascending=True)
-    )
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Annualized Voluntary Attrition", pct(selected_annualized, 1))
+    c2.metric("Voluntary Exits", selected_vol_exits)
+    c3.metric("Involuntary Exits", selected_invol_exits)
+
+    if len(quarterly_rates):
+        max_q = max(5, int(np.ceil(quarterly_rates["Attrition %"].max() / 5.0) * 5 + 5))
+        fig = px.bar(
+            quarterly_rates,
+            x="Quarter",
+            y="Attrition %",
+            text="Attrition %",
+            title="Quarterly voluntary attrition • annualized"
+        )
+        fig.update_traces(
+            texttemplate="%{text:.1f}%",
+            textposition="outside",
+            cliponaxis=False
+        )
+        fig.update_yaxes(
+            range=[0, max_q],
+            tick0=0,
+            dtick=5,
+            ticksuffix="%"
+        )
+        fig.update_layout(
+            height=300,
+            margin=dict(l=20, r=20, t=50, b=25)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     left, right = st.columns(2)
 
     with left:
+        voluntary = (
+            filtered[
+                (filtered["exit_event"] == 1) &
+                (filtered["exit_type"] == "Voluntary")
+            ]["exit_reason"]
+            .value_counts()
+            .rename_axis("Reason")
+            .reset_index(name="Count")
+            .sort_values("Count", ascending=True)
+        )
+
         st.markdown("#### Top voluntary exit reasons")
         if len(voluntary):
             fig = px.bar(
@@ -1172,21 +1150,28 @@ with tabs[1]:
                 text="Count"
             )
             fig.update_traces(textposition="outside", cliponaxis=False)
-            fig.update_xaxes(
-                dtick=1,
-                title="Exits",
-                rangemode="tozero"
-            )
+            fig.update_xaxes(dtick=1, title="Exits", rangemode="tozero")
             fig.update_yaxes(title=None)
             fig.update_layout(
-                height=max(240, 38 * len(voluntary)),
-                margin=dict(l=10, r=35, t=15, b=35)
+                height=max(230, 34 * len(voluntary)),
+                margin=dict(l=10, r=35, t=10, b=30)
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No voluntary exits in this cut.")
 
     with right:
+        involuntary = (
+            filtered[
+                (filtered["exit_event"] == 1) &
+                (filtered["exit_type"] == "Involuntary")
+            ]["exit_reason"]
+            .value_counts()
+            .rename_axis("Reason")
+            .reset_index(name="Count")
+            .sort_values("Count", ascending=True)
+        )
+
         st.markdown("#### Involuntary separation types")
         if len(involuntary):
             fig = px.bar(
@@ -1197,15 +1182,11 @@ with tabs[1]:
                 text="Count"
             )
             fig.update_traces(textposition="outside", cliponaxis=False)
-            fig.update_xaxes(
-                dtick=1,
-                title="Exits",
-                rangemode="tozero"
-            )
+            fig.update_xaxes(dtick=1, title="Exits", rangemode="tozero")
             fig.update_yaxes(title=None)
             fig.update_layout(
-                height=max(240, 38 * len(involuntary)),
-                margin=dict(l=10, r=35, t=15, b=35)
+                height=max(230, 34 * len(involuntary)),
+                margin=dict(l=10, r=35, t=10, b=30)
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
@@ -1371,7 +1352,7 @@ with tabs[2]:
         dtick=10,
         ticksuffix="%"
     )
-    fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+    fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=25))
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1403,7 +1384,7 @@ with tabs[3]:
     critical_total = critical_roles["employee_id"].nunique()
     coverage = covered / critical_total * 100 if critical_total else np.nan
 
-    internal_moves = int(round(total_hc * 0.08))
+    internal_moves = int(np.clip(round(5 * len(period_months)), 4, 20))
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Total Headcount", total_hc)
@@ -1415,7 +1396,7 @@ with tabs[3]:
 
     st.caption(
         "Talent mix is designed as 70% Other Talent, 20% High Potential Talent and 10% Top Talent. "
-        "Internal movement is held at approximately 8% of headcount."
+        "Internal movement is deliberately modest at roughly 10–20 moves per quarter."
     )
 
     # Smaller charts
@@ -1535,17 +1516,43 @@ with tabs[4]:
 
     manager_rows = []
 
+    # Base manager effects deliberately create a 6–15 point spread by metric.
+    manager_adjustments = {
+        "Anuj":   {"1:1 Coverage": 7,  "Skip Levels": 5,  "Coaching": 8,  "Team Pulse": 6,  "Learning Score": 7},
+        "Cassie": {"1:1 Coverage": 3,  "Skip Levels": 2,  "Coaching": 4,  "Team Pulse": 3,  "Learning Score": 2},
+        "Rafee":  {"1:1 Coverage": -7, "Skip Levels": -5, "Coaching": -6, "Team Pulse": -8, "Learning Score": -5},
+        "Priya":  {"1:1 Coverage": 6,  "Skip Levels": 4,  "Coaching": 9,  "Team Pulse": 7,  "Learning Score": 5},
+        "Zainab": {"1:1 Coverage": 0,  "Skip Levels": -1, "Coaching": 1,  "Team Pulse": 0,  "Learning Score": 1},
+    }
+
     for mgr, g in filtered.groupby("manager"):
-        manager_rows.append({
-            "Manager": mgr,
-            "HC": headcount(g),
-            "Respondents": respondents(g),
+        base_vals = {
             "1:1 Coverage": survey_mean(g, "one_to_one"),
             "Skip Levels": survey_mean(g, "skip_level"),
             "Coaching": survey_mean(g, "coaching"),
             "Team Pulse": survey_mean(g, "team_pulse"),
             "Learning Score": survey_mean(g, "learning_score")
-        })
+        }
+
+        row = {
+            "Manager": mgr,
+            "HC": headcount(g),
+            "Respondents": respondents(g)
+        }
+
+        for metric, value in base_vals.items():
+            if pd.isna(value):
+                row[metric] = np.nan
+            else:
+                row[metric] = float(
+                    np.clip(
+                        value + manager_adjustments[mgr][metric],
+                        45,
+                        95
+                    )
+                )
+
+        manager_rows.append(row)
 
     mgr_df = pd.DataFrame(manager_rows)
 
