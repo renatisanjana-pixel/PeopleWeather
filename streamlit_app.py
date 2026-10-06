@@ -602,9 +602,9 @@ def generate_data():
     # business ownership table is ever displayed.
 
     division_portfolio = {
-        "Enterprise CS": (0.22, 0.62),
-        "Mid-Market CS": (0.09, 0.28),
-        "SMB CS": (0.025, 0.09),
+        "Enterprise CS": (0.055, 0.16),
+        "Mid-Market CS": (0.025, 0.08),
+        "SMB CS": (0.008, 0.025),
         "Customer Support": (0.0, 0.0),
         "CS Operations": (0.0, 0.0),
     }
@@ -793,11 +793,35 @@ def business_metrics(data):
     # Elevated people risk is deliberately cohort-level: flight-risk signal
     # OR exit-pipeline flag. No individual prediction is displayed.
     at_risk = latest_slice[
-        (latest_slice["flight_risk"] >= 7) |
-        (latest_slice["exit_pipeline_flag"])
+        (latest_slice["flight_risk"] >= 8) |
+        (
+            (latest_slice["exit_pipeline_flag"]) &
+            (latest_slice["flight_risk"] >= 6)
+        )
     ]
 
     portfolio_risk_cr = at_risk["merchant_portfolio_cr"].sum()
+
+    # Quarter-sensitive calibration for the synthetic business story.
+    # Q2FY27 is intentionally a steadier quarter; post-Q3 / ratings periods are higher.
+    latest_month = pd.Timestamp(latest_month)
+    quarter_risk_multiplier = 1.0
+    if latest_month in QUARTER_MONTHS["Q2FY27"]:
+        quarter_risk_multiplier = 0.72
+    elif latest_month in QUARTER_MONTHS["Q3FY27"]:
+        quarter_risk_multiplier = 1.18
+    elif latest_month in QUARTER_MONTHS["Q4FY26"]:
+        quarter_risk_multiplier = 1.12
+    elif latest_month in QUARTER_MONTHS["Q3FY26"]:
+        quarter_risk_multiplier = 1.15
+    elif latest_month in QUARTER_MONTHS["Q1FY27"]:
+        quarter_risk_multiplier = 0.88
+    elif latest_month in QUARTER_MONTHS["Q1FY26"]:
+        quarter_risk_multiplier = 0.90
+    elif latest_month in QUARTER_MONTHS["Q2FY26"]:
+        quarter_risk_multiplier = 0.82
+
+    portfolio_risk_cr *= quarter_risk_multiplier
 
     support = latest_slice[latest_slice["division"] == "Customer Support"]
     support_sla = support["sla_adherence"].mean() if len(support) else np.nan
@@ -816,7 +840,7 @@ def business_metrics(data):
         (latest_slice["renewal_due_90d_cr"] > 0) &
         (~latest_slice["backup_covered"]),
         "renewal_due_90d_cr"
-    ].sum()
+    ].sum() * quarter_risk_multiplier
 
     ramp = data.loc[data["join_event"], "ramp_days"].dropna()
     median_ramp_days = float(ramp.median()) if len(ramp) else 78.0
