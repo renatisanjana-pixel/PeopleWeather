@@ -468,7 +468,7 @@ def generate_data():
     # --------------------------------------------------------
     panel["join_event"] = False
 
-    # 14-20 joiners per month -> roughly 40-60 joiners per quarter.
+    # Controlled monthly joiners. Q2FY27 is intentionally lower at ~30 hires for the quarter.
     monthly_joiners = {
         pd.Timestamp("2025-04-01"): 15,
         pd.Timestamp("2025-05-01"): 17,
@@ -485,9 +485,9 @@ def generate_data():
         pd.Timestamp("2026-04-01"): 17,
         pd.Timestamp("2026-05-01"): 19,
         pd.Timestamp("2026-06-01"): 15,
-        pd.Timestamp("2026-07-01"): 18,
-        pd.Timestamp("2026-08-01"): 16,
-        pd.Timestamp("2026-09-01"): 20,
+        pd.Timestamp("2026-07-01"): 10,
+        pd.Timestamp("2026-08-01"): 10,
+        pd.Timestamp("2026-09-01"): 10,
         pd.Timestamp("2026-10-01"): 17,
         pd.Timestamp("2026-11-01"): 15,
         pd.Timestamp("2026-12-01"): 18,
@@ -529,7 +529,7 @@ def generate_data():
         # approximately 9 voluntary exits across the quarter.
         pd.Timestamp("2026-07-01"): 4,
         pd.Timestamp("2026-08-01"): 3,
-        pd.Timestamp("2026-09-01"): 3,
+        pd.Timestamp("2026-09-01"): 4,
         # Q3FY27 - rises again
         pd.Timestamp("2026-10-01"): 8,
         pd.Timestamp("2026-11-01"): 9,
@@ -542,6 +542,7 @@ def generate_data():
         pd.Timestamp("2025-07-01"),
         pd.Timestamp("2026-04-01"),
         pd.Timestamp("2026-07-01"),
+        pd.Timestamp("2026-09-01"),
     }
 
     for month, total_exits in monthly_total_exits.items():
@@ -588,10 +589,17 @@ def generate_data():
                     p=[0.75, 0.15, 0.10]
                 )
             else:
-                reason = rng.choice(
-                    ["Probation failure", "End of contract", "Dismissal"],
-                    p=[0.45, 0.35, 0.20]
-                )
+                # Outside the Oct-Mar performance cycle, use varied reasons
+                # so sparse involuntary exits do not collapse into one category.
+                if month == pd.Timestamp("2026-07-01"):
+                    reason = "Probation failure"
+                elif month == pd.Timestamp("2026-09-01"):
+                    reason = "End of contract"
+                else:
+                    reason = rng.choice(
+                        ["Probation failure", "End of contract", "Dismissal"],
+                        p=[0.45, 0.35, 0.20]
+                    )
             panel.loc[idx, "exit_reason"] = reason
 
 
@@ -829,10 +837,7 @@ def business_metrics(data):
 
     uncovered = latest_slice[
         (latest_slice["accounts_owned"] > 0) &
-        (
-            (latest_slice["exit_pipeline_flag"]) |
-            (~latest_slice["backup_covered"])
-        )
+        (~latest_slice["backup_covered"])
     ]
     uncovered_accounts = int(uncovered["accounts_owned"].sum())
 
@@ -1125,12 +1130,12 @@ with tabs[0]:
     row2 = st.columns(3)
 
     row1[0].metric(
-        "Portfolio at Risk",
+        "Commercial Value at Risk",
         f"₹{biz['portfolio_risk_cr']:.1f} Cr",
         help=(
-            "Synthetic merchant portfolio value supported by cohorts with elevated "
-            "people-risk signals. This is a cohort-level exposure indicator, not an "
-            "individual resignation prediction."
+            "Synthetic commercial / contract value associated with managed accounts "
+            "supported by cohorts showing elevated people-risk signals. This is a "
+            "cohort-level exposure indicator, not an individual resignation prediction."
         )
     )
     row1[1].metric(
@@ -1177,7 +1182,7 @@ with tabs[0]:
 
     st.caption(
         "Business metrics are synthetic and shown only at aggregated cohort level. "
-        "Portfolio at Risk is not a prediction of individual resignation."
+        "Commercial Value at Risk is not a prediction of individual resignation."
     )
 
     st.markdown("#### Backup coverage action tracker")
@@ -1378,7 +1383,7 @@ with tabs[0]:
         <div class="ai-good">
         <b>People signal</b><br>
         {pulse_summary}{top_bottom_summary}
-        <br><br><b>Business context:</b> the selected population carries ₹{biz['portfolio_risk_cr']:.1f} Cr of merchant portfolio under elevated people-risk signals, with ₹{biz['renewal_risk_cr']:.1f} Cr of 90-day renewals lacking backup coverage.
+        <br><br><b>Business context:</b> ₹{biz['portfolio_risk_cr']:.1f} Cr of commercial value is supported by cohorts showing elevated people-risk signals, with ₹{biz['renewal_risk_cr']:.1f} Cr of 90-day renewals lacking backup coverage.
         <br><br><b>Suggested action:</b> reinforce the practices behind the strongest themes and use targeted listening on the bottom two themes before choosing an intervention.
         </div>
         """,
@@ -1392,7 +1397,7 @@ with tabs[0]:
         {attrition_summary}<br>
         Top voluntary exit reasons in the selected period: <b>{reason_text}</b>.
         <br><br><b>Business context:</b> {biz['uncovered_accounts']:,} merchant accounts have elevated coverage risk in this cut. Support SLA is {"N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%"} with a synthetic backlog of {biz['support_backlog']:,} tickets.
-        <br><br><b>Suggested action:</b> prioritise retention actions against the leading exit reasons, rebalance exposed merchant portfolios and establish backup ownership for near-term renewals.
+        <br><br><b>Suggested action:</b> prioritise retention actions against the leading exit reasons, rebalance exposed account portfolios and establish backup ownership for near-term renewals.
         </div>
         """,
         unsafe_allow_html=True
@@ -1567,7 +1572,7 @@ with tabs[1]:
             <div class="ai-watch">
             <b>Customer continuity impact</b><br>
             Voluntary exits in the selected period are associated with approximately
-            <b>₹{portfolio_reassigned:.1f} Cr</b> of merchant portfolio and
+            <b>₹{portfolio_reassigned:.1f} Cr</b> of commercial value and
             <b>{accounts_reassigned:,}</b> merchant accounts requiring continuity planning or reassignment.
             </div>
             """,
@@ -1880,8 +1885,8 @@ with tabs[3]:
         <div class="ai-watch">
         <b>Business continuity lens</b><br>
         <b>₹{talent_biz['renewal_risk_cr']:.1f} Cr</b> of 90-day renewal value currently lacks backup coverage,
-        while <b>₹{talent_biz['portfolio_risk_cr']:.1f} Cr</b> of merchant portfolio sits in cohorts with elevated people-risk signals.
-        <br><br><b>HRBP action:</b> prioritise backup ownership and succession conversations for critical merchant portfolios before broad-based retention activity.
+        while <b>₹{talent_biz['portfolio_risk_cr']:.1f} Cr</b> of commercial value sits in cohorts with elevated people-risk signals.
+        <br><br><b>HRBP action:</b> prioritise backup ownership and succession conversations for critical commercial portfolios before broad-based retention activity.
         </div>
         """,
         unsafe_allow_html=True
