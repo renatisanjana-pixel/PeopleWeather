@@ -104,7 +104,7 @@ def generate_data():
 
     divisions = (
         ["Enterprise CS"] * 180 +
-        ["Mid-Market CS"] * 143 +
+        ["Business Engineering"] * 143 +
         ["SMB CS"] * 112 +
         ["Customer Support"] * 105 +
         ["CS Operations"] * 80
@@ -603,7 +603,7 @@ def generate_data():
 
     division_portfolio = {
         "Enterprise CS": (0.055, 0.16),
-        "Mid-Market CS": (0.025, 0.08),
+        "Business Engineering": (0.025, 0.08),
         "SMB CS": (0.008, 0.025),
         "Customer Support": (0.0, 0.0),
         "CS Operations": (0.0, 0.0),
@@ -611,7 +611,7 @@ def generate_data():
 
     division_accounts = {
         "Enterprise CS": (6, 16),
-        "Mid-Market CS": (14, 30),
+        "Business Engineering": (14, 30),
         "SMB CS": (28, 58),
         "Customer Support": (0, 0),
         "CS Operations": (0, 0),
@@ -726,7 +726,7 @@ def generate_data():
 
     role_base = {
         "Enterprise CS": 14,
-        "Mid-Market CS": 10,
+        "Business Engineering": 10,
         "SMB CS": 8,
         "Customer Support": 12,
         "CS Operations": 6
@@ -1195,20 +1195,20 @@ with tabs[0]:
     with bp1:
         st.markdown(
             backup_progress_html(
-                "Accounts with backup mapped",
+                "Accounts with Backup Owner",
                 accounts_cov_pct,
-                f"{accounts_covered:,} covered",
-                f"{accounts_uncovered:,} remaining",
+                f"{accounts_covered:,} with backup",
+                f"{accounts_uncovered:,} need backup",
             ),
             unsafe_allow_html=True
         )
     with bp2:
         st.markdown(
             backup_progress_html(
-                "90-day renewal value with backup mapped",
+                "Renewal Value Covered by Backup",
                 renewal_cov_pct,
-                f"₹{renewal_covered:.1f} Cr covered",
-                f"₹{renewal_uncovered:.1f} Cr remaining",
+                f"₹{renewal_covered:.1f} Cr protected",
+                f"₹{renewal_uncovered:.1f} Cr needs backup",
             ),
             unsafe_allow_html=True
         )
