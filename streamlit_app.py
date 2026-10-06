@@ -1653,21 +1653,46 @@ with tabs[1]:
 
         st.markdown("#### Involuntary separation types")
         if len(involuntary):
-            fig = px.bar(
-                involuntary,
-                x="Count",
-                y="Reason",
-                orientation="h",
-                text="Count"
-            )
-            fig.update_traces(textposition="outside", cliponaxis=False)
-            fig.update_xaxes(dtick=1, title="Exits", rangemode="tozero")
-            fig.update_yaxes(title=None)
-            fig.update_layout(
-                height=max(230, 34 * len(involuntary)),
-                margin=dict(l=10, r=35, t=10, b=30)
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            total_involuntary = int(involuntary["Count"].sum())
+
+            # For very small numbers, avoid oversized bars. Compact cards make
+            # sparse involuntary exits easier to read without visually exaggerating them.
+            if total_involuntary <= 4 and len(involuntary) <= 4:
+                card_cols = st.columns(len(involuntary))
+                for col, (_, row) in zip(card_cols, involuntary.sort_values("Count", ascending=False).iterrows()):
+                    share = (row["Count"] / total_involuntary * 100) if total_involuntary else 0
+                    with col:
+                        st.metric(
+                            row["Reason"],
+                            f"{int(row['Count'])} exit" if int(row["Count"]) == 1 else f"{int(row['Count'])} exits",
+                            help=f"{share:.0f}% of involuntary separations in the selected period."
+                        )
+
+                st.caption(
+                    f"{total_involuntary} involuntary separations in the selected period. "
+                    "Shown as counts rather than bars because the volume is small."
+                )
+            else:
+                fig = px.bar(
+                    involuntary,
+                    x="Count",
+                    y="Reason",
+                    orientation="h",
+                    text="Count"
+                )
+                fig.update_traces(textposition="outside", cliponaxis=False)
+                fig.update_xaxes(
+                    dtick=1,
+                    title="Exits",
+                    rangemode="tozero",
+                    range=[0, max(4, int(involuntary["Count"].max()) + 1)]
+                )
+                fig.update_yaxes(title=None)
+                fig.update_layout(
+                    height=max(230, 38 * len(involuntary)),
+                    margin=dict(l=10, r=35, t=10, b=30)
+                )
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No involuntary exits in this cut.")
 
