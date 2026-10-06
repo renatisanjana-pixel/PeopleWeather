@@ -146,27 +146,27 @@ def generate_data():
     # The wider synthetic roster is 620 unique people across the full period,
     # while active monthly headcount stays roughly in the 455–525 range.
     target_hc = {
-        pd.Timestamp("2025-04-01"): 470,
+        pd.Timestamp("2025-04-01"): 490,
         pd.Timestamp("2025-05-01"): 505,
-        pd.Timestamp("2025-06-01"): 462,
-        pd.Timestamp("2025-07-01"): 498,
-        pd.Timestamp("2025-08-01"): 455,
-        pd.Timestamp("2025-09-01"): 493,
-        pd.Timestamp("2025-10-01"): 525,
-        pd.Timestamp("2025-11-01"): 480,
-        pd.Timestamp("2025-12-01"): 515,
-        pd.Timestamp("2026-01-01"): 472,
-        pd.Timestamp("2026-02-01"): 510,
-        pd.Timestamp("2026-03-01"): 465,
-        pd.Timestamp("2026-04-01"): 502,
-        pd.Timestamp("2026-05-01"): 458,
-        pd.Timestamp("2026-06-01"): 496,
-        pd.Timestamp("2026-07-01"): 523,
-        pd.Timestamp("2026-08-01"): 478,
-        pd.Timestamp("2026-09-01"): 512,
-        pd.Timestamp("2026-10-01"): 468,
-        pd.Timestamp("2026-11-01"): 506,
-        pd.Timestamp("2026-12-01"): 476,
+        pd.Timestamp("2025-06-01"): 484,
+        pd.Timestamp("2025-07-01"): 502,
+        pd.Timestamp("2025-08-01"): 489,
+        pd.Timestamp("2025-09-01"): 511,
+        pd.Timestamp("2025-10-01"): 495,
+        pd.Timestamp("2025-11-01"): 516,
+        pd.Timestamp("2025-12-01"): 500,
+        pd.Timestamp("2026-01-01"): 512,
+        pd.Timestamp("2026-02-01"): 494,
+        pd.Timestamp("2026-03-01"): 520,
+        pd.Timestamp("2026-04-01"): 503,
+        pd.Timestamp("2026-05-01"): 519,
+        pd.Timestamp("2026-06-01"): 497,
+        pd.Timestamp("2026-07-01"): 515,
+        pd.Timestamp("2026-08-01"): 501,
+        pd.Timestamp("2026-09-01"): 523,
+        pd.Timestamp("2026-10-01"): 506,
+        pd.Timestamp("2026-11-01"): 520,
+        pd.Timestamp("2026-12-01"): 498,
     }
 
     # Employees receive a first-entry month. The active roster is then built
@@ -341,12 +341,25 @@ def generate_data():
             if emp["talent"] == "Top Talent":
                 flight += 1.5
 
-            # Participation.
-            participation_prob = 0.45
-            if mgr == "Rafee" and month >= pd.Timestamp("2026-04-01"):
-                participation_prob = 0.36
-            if mgr == "Priya" and month >= pd.Timestamp("2026-07-01"):
-                participation_prob = 0.56
+            # Participation deliberately varies widely across teams while
+            # averaging close to 56% overall.
+            manager_participation = {
+                "Anuj": 0.90,
+                "Cassie": 0.68,
+                "Rafee": 0.04,
+                "Priya": 0.62,
+                "Zainab": 0.56,
+            }
+            monthly_participation_shift = [
+                -0.03, 0.02, 0.00, 0.03, -0.02, 0.01, -0.01,
+                0.02, -0.03, 0.01, 0.03, -0.02, 0.00, 0.02,
+                -0.01, 0.03, -0.02, 0.01, 0.00, 0.02, -0.01
+            ][mi]
+            participation_prob = np.clip(
+                manager_participation[mgr] + monthly_participation_shift,
+                0.04,
+                0.90
+            )
 
             survey_participated = rng.random() < participation_prob
 
@@ -377,12 +390,15 @@ def generate_data():
                         p=[0.10, 0.28, 0.16, 0.18, 0.10, 0.12, 0.06]
                     )
 
-            # Monthly exit pipeline is a point-in-time signal.
+            # Monthly exit pipeline stays within a realistic 3%-9% range.
             pipeline_prob = 0.045
-            if flight >= 45:
-                pipeline_prob += 0.035
+            if flight >= 7:
+                pipeline_prob += 0.015
             if div == "Enterprise CS" and month >= pd.Timestamp("2026-06-01"):
-                pipeline_prob += 0.018
+                pipeline_prob += 0.012
+            if mgr == "Rafee":
+                pipeline_prob += 0.008
+            pipeline_prob = float(np.clip(pipeline_prob, 0.03, 0.09))
             exit_pipeline_flag = rng.random() < pipeline_prob
 
             # Monthly internal move event.
@@ -446,6 +462,128 @@ def generate_data():
             })
 
     panel = pd.DataFrame(rows)
+
+    # --------------------------------------------------------
+    # Controlled workforce events for a more coherent demo
+    # --------------------------------------------------------
+    panel["join_event"] = False
+
+    # 14-20 joiners per month -> roughly 40-60 joiners per quarter.
+    monthly_joiners = {
+        pd.Timestamp("2025-04-01"): 15,
+        pd.Timestamp("2025-05-01"): 17,
+        pd.Timestamp("2025-06-01"): 16,
+        pd.Timestamp("2025-07-01"): 18,
+        pd.Timestamp("2025-08-01"): 15,
+        pd.Timestamp("2025-09-01"): 19,
+        pd.Timestamp("2025-10-01"): 16,
+        pd.Timestamp("2025-11-01"): 17,
+        pd.Timestamp("2025-12-01"): 18,
+        pd.Timestamp("2026-01-01"): 15,
+        pd.Timestamp("2026-02-01"): 20,
+        pd.Timestamp("2026-03-01"): 16,
+        pd.Timestamp("2026-04-01"): 17,
+        pd.Timestamp("2026-05-01"): 19,
+        pd.Timestamp("2026-06-01"): 15,
+        pd.Timestamp("2026-07-01"): 18,
+        pd.Timestamp("2026-08-01"): 16,
+        pd.Timestamp("2026-09-01"): 20,
+        pd.Timestamp("2026-10-01"): 17,
+        pd.Timestamp("2026-11-01"): 15,
+        pd.Timestamp("2026-12-01"): 18,
+    }
+
+    for month, target_joins in monthly_joiners.items():
+        idx = panel.index[panel["month"] == month].to_numpy()
+        chosen = rng.choice(idx, size=min(target_joins, len(idx)), replace=False)
+        panel.loc[chosen, "join_event"] = True
+
+    # Rebuild attrition events so quarterly patterns are deliberate.
+    panel["exit_event"] = 0
+    panel["exit_type"] = ""
+    panel["exit_reason"] = ""
+
+    monthly_total_exits = {
+        pd.Timestamp("2025-04-01"): 5,
+        pd.Timestamp("2025-05-01"): 5,
+        pd.Timestamp("2025-06-01"): 6,
+        pd.Timestamp("2025-07-01"): 5,
+        pd.Timestamp("2025-08-01"): 6,
+        pd.Timestamp("2025-09-01"): 5,
+        pd.Timestamp("2025-10-01"): 7,
+        pd.Timestamp("2025-11-01"): 7,
+        pd.Timestamp("2025-12-01"): 8,
+        pd.Timestamp("2026-01-01"): 7,
+        pd.Timestamp("2026-02-01"): 7,
+        pd.Timestamp("2026-03-01"): 8,
+        pd.Timestamp("2026-04-01"): 5,
+        pd.Timestamp("2026-05-01"): 6,
+        pd.Timestamp("2026-06-01"): 5,
+        pd.Timestamp("2026-07-01"): 6,
+        pd.Timestamp("2026-08-01"): 5,
+        pd.Timestamp("2026-09-01"): 6,
+        pd.Timestamp("2026-10-01"): 7,
+        pd.Timestamp("2026-11-01"): 7,
+        pd.Timestamp("2026-12-01"): 8,
+    }
+
+    # Outside Oct-Mar: only one involuntary exit per quarter.
+    sparse_involuntary_months = {
+        pd.Timestamp("2025-04-01"),
+        pd.Timestamp("2025-07-01"),
+        pd.Timestamp("2026-04-01"),
+        pd.Timestamp("2026-07-01"),
+    }
+
+    for month, total_exits in monthly_total_exits.items():
+        month_idx = panel.index[panel["month"] == month].to_numpy()
+        chosen = rng.choice(month_idx, size=min(total_exits, len(month_idx)), replace=False)
+
+        if month.month in [10, 11, 12, 1, 2, 3]:
+            invol_count = min(2, len(chosen))
+        elif month in sparse_involuntary_months:
+            invol_count = min(1, len(chosen))
+        else:
+            invol_count = 0
+
+        invol_idx = chosen[:invol_count]
+        vol_idx = chosen[invol_count:]
+
+        panel.loc[chosen, "exit_event"] = 1
+        panel.loc[vol_idx, "exit_type"] = "Voluntary"
+        panel.loc[invol_idx, "exit_type"] = "Involuntary"
+
+        # Better salary is deliberately the top voluntary reason.
+        for j, idx in enumerate(vol_idx):
+            if j % 2 == 0:
+                reason = "Better salary"
+            else:
+                reason = rng.choice(
+                    [
+                        "Taking time off for personal/medical reasons",
+                        "Onsite opportunity",
+                        "Better benefits package",
+                        "Pursuing passion outside of corporate",
+                        "Long Work Hours",
+                        "Culture Mismatch",
+                    ],
+                    p=[0.18, 0.14, 0.14, 0.12, 0.24, 0.18]
+                )
+            panel.loc[idx, "exit_reason"] = reason
+
+        # Oct-Mar involuntary exits are heavily weighted to poor performance.
+        for j, idx in enumerate(invol_idx):
+            if month.month in [10, 11, 12, 1, 2, 3]:
+                reason = "Poor performance" if j == 0 or invol_count == 1 else rng.choice(
+                    ["Poor performance", "Probation failure", "Dismissal"],
+                    p=[0.75, 0.15, 0.10]
+                )
+            else:
+                reason = rng.choice(
+                    ["Probation failure", "End of contract", "Dismissal"],
+                    p=[0.45, 0.35, 0.20]
+                )
+            panel.loc[idx, "exit_reason"] = reason
 
     role_base = {
         "Enterprise CS": 14,
@@ -552,7 +690,18 @@ def period_attrition(data, months):
     period = data[data["month"].isin(months)]
     exits = period["exit_event"].sum()
     avg_hc = period_headcount_average(data, months)
-    return (exits / avg_hc * 100) if avg_hc else np.nan
+    n_months = max(len(months), 1)
+
+    # Annualized attrition:
+    # monthly = exits / avg HC * 12
+    # quarterly ≈ exits / avg HC * (365/90)
+    # other periods use a 12 / number-of-months annualization factor.
+    if n_months == 3:
+        annualization_factor = 365 / 90
+    else:
+        annualization_factor = 12 / n_months
+
+    return (exits / avg_hc * annualization_factor * 100) if avg_hc else np.nan
 
 def compact_multiselect(label, options, key, format_func=None):
     return st.sidebar.multiselect(
@@ -654,21 +803,35 @@ with tabs[0]:
 
     avg_hc = period_headcount_average(filtered_non_time, period_months)
 
-    joiners = (
-        filtered[
-            filtered["join_month"].isin(period_months)
-        ][["employee_id", "join_month"]]
-        .drop_duplicates()
-        .shape[0]
+    joiners = int(filtered["join_event"].sum())
+
+    # Exit Pipeline and Open Roles are point-in-time style metrics.
+    # For multi-month periods we show the average monthly position so they
+    # stay within sensible percentages of headcount.
+    monthly_pipeline = (
+        filtered.groupby("month")["exit_pipeline_flag"].sum()
     )
+    exit_pipeline = int(round(monthly_pipeline.mean())) if len(monthly_pipeline) else 0
 
-    exit_pipeline = int(filtered["exit_pipeline_flag"].sum())
-    internal_moves = int(filtered["internal_move_flag"].sum())
+    # Open roles scale to 3%-10% of the selected cohort and stay slightly
+    # above monthly exits on average.
+    monthly_open_roles = []
+    for month in period_months:
+        month_slice = filtered_non_time[filtered_non_time["month"] == month]
+        month_hc = headcount(month_slice)
+        month_exits = int(month_slice["exit_event"].sum())
+        if month_hc:
+            suggested = max(
+                round(month_hc * 0.05),
+                month_exits + round(month_hc * 0.025)
+            )
+            monthly_open_roles.append(
+                min(round(month_hc * 0.10), max(round(month_hc * 0.03), suggested))
+            )
+    open_roles = int(round(np.mean(monthly_open_roles))) if monthly_open_roles else 0
 
-    roles = open_roles_df[open_roles_df["month"].isin(period_months)].copy()
-    if sel_division:
-        roles = roles[roles["division"].isin(sel_division)]
-    open_roles = int(roles["open_roles"].sum())
+    # Internal movement is intentionally held around 8% of headcount.
+    internal_moves = int(round(avg_hc * 0.08))
 
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Avg Headcount", f"{avg_hc:.0f}")
@@ -679,7 +842,7 @@ with tabs[0]:
 
     st.caption(
         "For multi-month or quarterly views: Headcount is the average monthly headcount; "
-        "Joiners, Exit Pipeline, Open Roles and Internal Moves are summed across the selected months."
+        "Joiners are summed across the selected months; Exit Pipeline and Open Roles are average monthly positions; Internal Moves is shown at ~8% of average headcount."
     )
 
     latest_selected_month = max(period_months)
@@ -783,16 +946,16 @@ with tabs[0]:
         watch_points.append(
             f"Exit pipeline volume is elevated relative to average headcount ({pipeline_rate:.0f}%)."
         )
-    if open_roles / max(len(period_months), 1) >= 55:
+    if open_roles >= avg_hc * 0.08:
         watch_points.append(
-            "Open-role demand is elevated and may create capacity pressure."
+            "Open-role demand is elevated relative to current headcount and may create capacity pressure."
         )
     if joiners < 10 and len(period_months) >= 3:
         watch_points.append(
             "Joiner volume is relatively low for the selected multi-month period."
         )
 
-    if pulse_participation < 55:
+    if pulse_participation < 60:
         watch_points.append(
             f"Pulse participation is only {pulse_participation:.0f}%, which weakens confidence in listening insights."
         )
@@ -812,7 +975,7 @@ with tabs[0]:
     st.markdown(
         '<div class="ai-watch"><b>Watch-out</b><br>' +
         "<br>".join([f"• {x}" for x in watch_points]) +
-        "<br><br><b>Suggested action:</b> use manager nudges, short reminders, leadership call-outs and protected survey time to lift Pulse participation, while reviewing vacancies and exit pipeline in parallel.</div>",
+        "<br><br><b>Suggested action:</b> use manager nudges, short reminders, leadership call-outs, protected survey time and visible close-the-loop actions to lift Pulse participation, while reviewing vacancies and exit pipeline in parallel.</div>",
         unsafe_allow_html=True
     )
 
@@ -833,7 +996,7 @@ with tabs[1]:
         .sort_values("month")
     )
     monthly_attr["Attrition %"] = (
-        monthly_attr["Exits"] / monthly_attr["HC"] * 100
+        monthly_attr["Exits"] / monthly_attr["HC"] * 12 * 100
     )
     monthly_attr["Month Label"] = monthly_attr["month"].dt.strftime("%b %Y")
 
@@ -845,7 +1008,7 @@ with tabs[1]:
         y="Attrition %",
         markers=True,
         text="Attrition %",
-        title="Monthly attrition"
+        title="Monthly attrition • annualized"
     )
     fig.update_traces(
         texttemplate="%{text:.1f}%",
@@ -859,7 +1022,7 @@ with tabs[1]:
         ticksuffix="%",
         title="Attrition"
     )
-    fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=25))
+    fig.update_layout(height=250, margin=dict(l=20, r=20, t=45, b=20))
     st.plotly_chart(fig, use_container_width=True)
 
     # Selected period attrition = exits / average monthly headcount.
@@ -879,7 +1042,7 @@ with tabs[1]:
     involuntary_count = int((filtered["exit_type"] == "Involuntary").sum())
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Selected Period Attrition", pct(selected_attrition, 1))
+    c1.metric("Annualized Attrition", pct(selected_attrition, 1))
     c2.metric("LTM Attrition", pct(ltm_attrition, 1))
     c3.metric("Voluntary Exits", voluntary_count)
     c4.metric("Involuntary Exits", involuntary_count)
@@ -929,7 +1092,7 @@ with tabs[1]:
                 x="Quarter",
                 y="Attrition %",
                 text="Attrition %",
-                title="Quarterly attrition"
+                title="Quarterly attrition • annualized"
             )
             fig.update_traces(
                 texttemplate="%{text:.1f}%",
@@ -1110,6 +1273,67 @@ with tabs[2]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # Dynamic AI interpretation of the strongest and weakest themes.
+    if len(themes) >= 4:
+        ranked = themes.sort_values("Sentiment", ascending=False).reset_index(drop=True)
+        top_two = ranked.head(2)
+        bottom_two = ranked.tail(2).sort_values("Sentiment")
+
+        positive_explanations = {
+            "Inclusivity": "inclusive team practices and broad access to support may be landing well",
+            "Team": "strong peer support and day-to-day collaboration may be reinforcing team sentiment",
+            "Manager": "regular manager touchpoints and clearer local communication may be helping",
+            "Wellbeing": "workload balancing and flexibility may be supporting employee wellbeing",
+            "Culture": "employees may be experiencing stronger belonging and alignment with team norms",
+            "Org Listening": "visible follow-through on feedback may be increasing confidence in listening channels",
+            "Learning": "access to role-relevant learning and career development may be resonating",
+            "Innovation": "employees may be finding space to test ideas and improve customer processes",
+            "Work": "role clarity and meaningful customer ownership may be supporting work sentiment",
+        }
+
+        watch_explanations = {
+            "Work": "Possible contributors to validate: reduced quality or variety of work after projects close, repetitive operational work, or friction from external-agency hand-offs.",
+            "Innovation": "Possible contributor to validate: operational payment peaks can crowd out experimentation — festive season (Oct–Nov), year-end (Dec), FY-end (Mar), education-fee cycles (Apr–Jul), summer travel (May–Jun), tax deadlines (Jun/Sep/Dec/Mar), and the first week after salary credit.",
+            "Manager": "Possible contributors to validate: inconsistent 1:1 cadence, low coaching depth, or managers being absorbed in delivery escalations.",
+            "Wellbeing": "Possible contributors to validate: sustained workload, escalation intensity, peak-period staffing gaps, or inadequate recovery time.",
+            "Learning": "Possible contributors to validate: learning may feel too generic, difficult to use on the job, or deprioritised during delivery peaks.",
+            "Culture": "Possible contributors to validate: local team experiences may not match the wider organisational culture promise.",
+            "Org Listening": "Possible contributors to validate: employees may not be seeing enough visible action after prior surveys.",
+            "Inclusivity": "Possible contributors to validate: uneven access to opportunities, decision-making forums, or manager support.",
+            "Team": "Possible contributors to validate: cross-team dependencies, role ambiguity, or uneven workload distribution.",
+        }
+
+        top_text = "<br>".join([
+            f"• <b>{row['Theme']} ({row['Sentiment']:.0f}%)</b>: {positive_explanations[row['Theme']]}."
+            for _, row in top_two.iterrows()
+        ])
+        bottom_text = "<br>".join([
+            f"• <b>{row['Theme']} ({row['Sentiment']:.0f}%)</b>: {watch_explanations[row['Theme']]}"
+            for _, row in bottom_two.iterrows()
+        ])
+
+        st.markdown(
+            f"""
+            <div class="ai-good">
+            <b>AI summary • strongest themes</b><br>
+            {top_text}
+            <br><br><b>Suggested action:</b> identify the practices behind these strengths and replicate them across lower-scoring teams.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            f"""
+            <div class="ai-watch">
+            <b>AI summary • themes to explore</b><br>
+            {bottom_text}
+            <br><br><b>Suggested action:</b> validate these hypotheses through manager listening, targeted focus groups and the next pulse before choosing an intervention.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     selected_theme = st.selectbox(
         "Sentiment trend theme",
         list(theme_map.keys())
@@ -1157,13 +1381,20 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Talent")
 
-    # Talent snapshot uses latest month in selected period.
     latest = filtered_non_time[
         filtered_non_time["month"] == period_end
     ].copy()
 
-    top_talent = latest[latest["talent"] == "Top Talent"]["employee_id"].nunique()
-    high_risk = latest[latest["flight_risk"] >= 8]["employee_id"].nunique()
+    total_hc = headcount(latest)
+
+    # Deliberate talent architecture:
+    # 20% High Potential Talent + 10% Top Talent = 30% accelerated talent pool.
+    high_potential = int(round(total_hc * 0.20))
+    top_talent = int(round(total_hc * 0.10))
+    other_talent = max(0, total_hc - high_potential - top_talent)
+
+    # Keep high-flight-risk population to a single-digit percentage.
+    avg_flight_risk_pct = float(np.clip(latest["flight_risk"].mean(), 2, 9))
 
     critical_roles = latest[latest["job_level"].isin(["L3", "L4"])]
     covered = critical_roles[
@@ -1172,71 +1403,83 @@ with tabs[3]:
     critical_total = critical_roles["employee_id"].nunique()
     coverage = covered / critical_total * 100 if critical_total else np.nan
 
-    ijp = int((filtered["movement_type"] == "IJP").sum())
-    onsite = int((filtered["movement_type"] == "Onsite Rotation").sum())
+    internal_moves = int(round(total_hc * 0.08))
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Top Talent", top_talent)
-    c2.metric("High Flight Risk", high_risk)
-    c3.metric("Successor Coverage", pct(coverage))
-    c4.metric("IJP Moves", ijp)
-    c5.metric("Onsite Rotations", onsite)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("Total Headcount", total_hc)
+    c2.metric("High Potential", high_potential)
+    c3.metric("Top Talent", top_talent)
+    c4.metric("Flight Risk", f"{avg_flight_risk_pct:.0f}%")
+    c5.metric("Successor Coverage", pct(coverage))
+    c6.metric("Internal Moves", internal_moves)
 
+    st.caption(
+        "Talent mix is designed as 70% Other Talent, 20% High Potential Talent and 10% Top Talent. "
+        "Internal movement is held at approximately 8% of headcount."
+    )
+
+    # Smaller charts
     left, right = st.columns(2)
 
     with left:
-        talent_mix = (
-            latest.drop_duplicates("employee_id")["talent"]
-            .value_counts()
-            .reset_index()
-        )
-        talent_mix.columns = ["Talent", "Count"]
+        talent_mix = pd.DataFrame({
+            "Talent": ["Other Talent", "High Potential Talent", "Top Talent"],
+            "Count": [other_talent, high_potential, top_talent]
+        })
+        talent_mix["Percent"] = talent_mix["Count"] / max(total_hc, 1) * 100
 
         fig = px.bar(
             talent_mix,
             x="Talent",
-            y="Count",
-            text="Count",
+            y="Percent",
+            text="Percent",
             title=f"Talent mix • {pd.Timestamp(period_end).strftime('%b %Y')}"
         )
-        fig.update_traces(textposition="outside", cliponaxis=False)
-        fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+        fig.update_traces(
+            texttemplate="%{text:.0f}%",
+            textposition="outside",
+            cliponaxis=False
+        )
+        fig.update_yaxes(range=[0, 100], ticksuffix="%")
+        fig.update_layout(height=260, margin=dict(l=15, r=15, t=50, b=25))
         st.plotly_chart(fig, use_container_width=True)
 
     with right:
-        mobility = (
-            filtered[filtered["movement_type"] != "None"]["movement_type"]
-            .value_counts()
-            .reset_index()
+        ijp = int(round(internal_moves * 0.55))
+        onsite = int(round(internal_moves * 0.25))
+        role_expansion = max(0, internal_moves - ijp - onsite)
+
+        mobility = pd.DataFrame({
+            "Movement": ["IJP", "Onsite Rotation", "Role Expansion"],
+            "Count": [ijp, onsite, role_expansion]
+        })
+
+        fig = px.bar(
+            mobility,
+            x="Movement",
+            y="Count",
+            text="Count",
+            title="Internal mobility • ~8% of headcount"
         )
-        mobility.columns = ["Movement", "Count"]
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(height=260, margin=dict(l=15, r=15, t=50, b=25))
+        st.plotly_chart(fig, use_container_width=True)
 
-        if len(mobility):
-            fig = px.bar(
-                mobility,
-                x="Movement",
-                y="Count",
-                text="Count",
-                title="Internal mobility • selected period"
-            )
-            fig.update_traces(textposition="outside", cliponaxis=False)
-            fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No internal mobility in the selected cut.")
-
-    risk_by_talent = (
-        latest.groupby("talent")["flight_risk"]
-        .mean()
-        .reset_index()
-        .sort_values("flight_risk", ascending=False)
-    )
+    # Flight risk stays single digit by segment.
+    risk_by_talent = pd.DataFrame({
+        "Talent": ["Other Talent", "High Potential Talent", "Top Talent"],
+        "Flight Risk": [
+            max(2, avg_flight_risk_pct - 2),
+            min(8, avg_flight_risk_pct + 1),
+            min(9, avg_flight_risk_pct + 2)
+        ]
+    })
 
     fig = px.bar(
         risk_by_talent,
-        x="talent",
-        y="flight_risk",
-        text="flight_risk",
+        x="Talent",
+        y="Flight Risk",
+        text="Flight Risk",
         title="Flight risk by talent segment"
     )
     fig.update_traces(
@@ -1244,13 +1487,43 @@ with tabs[3]:
         textposition="outside",
         cliponaxis=False
     )
-    fig.update_yaxes(
-        range=[0, 100],
-        tick0=0,
-        dtick=10,
-        ticksuffix="%"
+    fig.update_yaxes(range=[0, 10], dtick=2, ticksuffix="%")
+    fig.update_layout(height=250, margin=dict(l=15, r=15, t=50, b=25))
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Aspiration Management")
+
+    aspiration = pd.DataFrame({
+        "Theme": [
+            "Career growth and promotion",
+            "Internal mobility or role change",
+            "Skill development and learning",
+            "Leadership aspirations",
+            "Compensation",
+            "Bigger scope and ownership",
+            "Recognition and visibility",
+            "Mentorship",
+            "Personal or life-stage needs"
+        ],
+        "Share": [68, 61, 55, 49, 43, 38, 33, 27, 19]
+    })
+
+    fig = px.bar(
+        aspiration.sort_values("Share"),
+        x="Share",
+        y="Theme",
+        orientation="h",
+        text="Share",
+        title="Top aspiration themes"
     )
-    fig.update_layout(margin=dict(l=20, r=20, t=55, b=35))
+    fig.update_traces(
+        texttemplate="%{text:.0f}%",
+        textposition="outside",
+        cliponaxis=False
+    )
+    fig.update_xaxes(range=[0, 80], ticksuffix="%")
+    fig.update_yaxes(title=None)
+    fig.update_layout(height=360, margin=dict(l=15, r=35, t=50, b=25))
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1318,11 +1591,28 @@ with tabs[4]:
         best = plot_df.iloc[0]
         low = plot_df.iloc[-1]
 
+        sustain_actions = {
+            "1:1 Coverage": "capture what is enabling consistent 1:1 cadence and replicate the operating rhythm across other teams",
+            "Skip Levels": "reuse the same skip-level cadence and question set with other manager populations",
+            "Coaching": "identify the coaching practices being used and turn them into peer-learning examples",
+            "Team Pulse": "understand which team practices are sustaining sentiment and scale those behaviours",
+            "Learning Score": "replicate the learning routines, role-based pathways and manager reinforcement that are working",
+        }
+
+        improvement_actions = {
+            "1:1 Coverage": "block recurring 1:1 slots, send nudges for overdue conversations, track completion weekly and ask managers to protect the time from delivery meetings",
+            "Skip Levels": "set a monthly skip-level calendar, rotate employee participation, use a standard question bank and close the loop visibly on recurring themes",
+            "Coaching": "run manager coaching clinics, pair lower-scoring managers with strong peers, provide conversation prompts and measure coaching completion monthly",
+            "Team Pulse": "run a focused team listening session, identify the two biggest pain points, publish a 30-day action plan and report progress back to the team",
+            "Learning Score": "create role-based learning paths, protect learning time, use completion nudges, and ask managers to connect learning goals to live customer work",
+        }
+
         st.markdown(
             f"""
             <div class="ai-good">
             <b>Positive signal</b><br>
             {best['Manager']} is strongest on {metric_choice} at {best[metric_choice]:.0f}%.
+            <br><br><b>What to sustain:</b> {sustain_actions[metric_choice]}.
             </div>
             """,
             unsafe_allow_html=True
@@ -1333,9 +1623,7 @@ with tabs[4]:
             <div class="ai-watch">
             <b>Watch-out</b><br>
             {low['Manager']} is lowest on {metric_choice} at {low[metric_choice]:.0f}%.
-            <br><br>
-            <b>Suggested action:</b> diagnose whether the gap is driven by cadence,
-            capability, workload or team context before choosing an intervention.
+            <br><br><b>Suggested action:</b> {improvement_actions[metric_choice]}.
             </div>
             """,
             unsafe_allow_html=True
