@@ -29,14 +29,14 @@ st.markdown("""
 [data-testid="stMetricValue"]{font-size:1.9rem;}
 
 .pp-header{
-    padding:22px 26px;
+    padding:14px 20px;
     border-radius:18px;
     background:linear-gradient(120deg,#4C1D95,#7C3AED,#A855F7);
     color:white;
     margin-bottom:12px;
 }
-.pp-header h1{margin:0;font-size:34px;}
-.pp-header p{margin:7px 0 0;opacity:.94;line-height:1.45;}
+.pp-header h1{margin:0;font-size:28px;line-height:1.1;}
+.pp-header p{margin:5px 0 0;opacity:.94;line-height:1.35;font-size:0.98rem;}
 
 .privacy{
     display:inline-block;
@@ -319,15 +319,15 @@ def generate_data():
                 team_pulse -= 5
                 flight += 2.0 + 0.20 * months_under_pressure
 
-            # Rafee deteriorates in manager cadence.
-            if mgr == "Rafee" and month >= pd.Timestamp("2026-03-01"):
+            # Priya deteriorates in manager cadence from Mar 2026 onward.
+            if mgr == "Priya" and month >= pd.Timestamp("2026-03-01"):
                 one_to_one -= 12
                 manager_theme -= 9
                 team_pulse -= 6
                 flight += 1.8
 
-            # Priya improves from Jul 2026 after coaching intervention.
-            if mgr == "Priya" and month >= pd.Timestamp("2026-07-01"):
+            # Rafee improves from Jul 2026 after coaching intervention.
+            if mgr == "Rafee" and month >= pd.Timestamp("2026-07-01"):
                 one_to_one += 8
                 coaching += 10
                 team_pulse += 5
@@ -346,8 +346,8 @@ def generate_data():
             manager_participation = {
                 "Anuj": 0.78,
                 "Cassie": 0.58,
-                "Rafee": 0.04,
-                "Priya": 0.54,
+                "Rafee": 0.54,
+                "Priya": 0.04,
                 "Zainab": 0.46,
             }
             monthly_participation_shift = [
@@ -367,7 +367,7 @@ def generate_data():
             attrition_prob = 0.007
             if div == "Enterprise CS" and month >= pd.Timestamp("2026-06-01"):
                 attrition_prob += 0.010
-            if mgr == "Rafee" and month >= pd.Timestamp("2026-04-01"):
+            if mgr == "Priya" and month >= pd.Timestamp("2026-04-01"):
                 attrition_prob += 0.006
             if emp["talent"] == "Top Talent":
                 attrition_prob += 0.003
@@ -504,27 +504,34 @@ def generate_data():
     panel["exit_reason"] = ""
 
     monthly_total_exits = {
-        pd.Timestamp("2025-04-01"): 5,
-        pd.Timestamp("2025-05-01"): 5,
-        pd.Timestamp("2025-06-01"): 6,
-        pd.Timestamp("2025-07-01"): 5,
-        pd.Timestamp("2025-08-01"): 6,
-        pd.Timestamp("2025-09-01"): 5,
-        pd.Timestamp("2025-10-01"): 7,
-        pd.Timestamp("2025-11-01"): 7,
-        pd.Timestamp("2025-12-01"): 8,
+        # Q1FY26 - stable
+        pd.Timestamp("2025-04-01"): 4,
+        pd.Timestamp("2025-05-01"): 4,
+        pd.Timestamp("2025-06-01"): 5,
+        # Q2FY26 - normal
+        pd.Timestamp("2025-07-01"): 4,
+        pd.Timestamp("2025-08-01"): 5,
+        pd.Timestamp("2025-09-01"): 4,
+        # Q3FY26 - spike post ratings cycle
+        pd.Timestamp("2025-10-01"): 8,
+        pd.Timestamp("2025-11-01"): 9,
+        pd.Timestamp("2025-12-01"): 9,
+        # Q4FY26 - elevated
         pd.Timestamp("2026-01-01"): 7,
-        pd.Timestamp("2026-02-01"): 7,
+        pd.Timestamp("2026-02-01"): 8,
         pd.Timestamp("2026-03-01"): 8,
-        pd.Timestamp("2026-04-01"): 5,
-        pd.Timestamp("2026-05-01"): 6,
-        pd.Timestamp("2026-06-01"): 5,
-        pd.Timestamp("2026-07-01"): 6,
+        # Q1FY27 - easing
+        pd.Timestamp("2026-04-01"): 4,
+        pd.Timestamp("2026-05-01"): 4,
+        pd.Timestamp("2026-06-01"): 4,
+        # Q2FY27 - back to normal
+        pd.Timestamp("2026-07-01"): 5,
         pd.Timestamp("2026-08-01"): 5,
-        pd.Timestamp("2026-09-01"): 6,
-        pd.Timestamp("2026-10-01"): 7,
-        pd.Timestamp("2026-11-01"): 7,
-        pd.Timestamp("2026-12-01"): 8,
+        pd.Timestamp("2026-09-01"): 5,
+        # Q3FY27 - rises again
+        pd.Timestamp("2026-10-01"): 8,
+        pd.Timestamp("2026-11-01"): 9,
+        pd.Timestamp("2026-12-01"): 9,
     }
 
     # Outside Oct-Mar: only one involuntary exit per quarter.
@@ -650,7 +657,7 @@ def generate_data():
                 - max(0, 72 - r["team_pulse"]) * 0.20
                 - max(0, r["flight_risk"] - 5) * 0.65
             )
-            if r["manager"] == "Rafee":
+            if r["manager"] == "Priya":
                 sla -= 3.0
             if r["month"].month in [10, 11, 12, 3]:
                 sla -= 2.0
@@ -778,31 +785,34 @@ def business_metrics(data):
             "median_ramp_days": np.nan,
         }
 
+    latest_month = data["month"].max()
+    latest_slice = data[data["month"] == latest_month].copy()
+
     # Elevated people risk is deliberately cohort-level: flight-risk signal
     # OR exit-pipeline flag. No individual prediction is displayed.
-    at_risk = data[
-        (data["flight_risk"] >= 7) |
-        (data["exit_pipeline_flag"])
+    at_risk = latest_slice[
+        (latest_slice["flight_risk"] >= 7) |
+        (latest_slice["exit_pipeline_flag"])
     ]
 
     portfolio_risk_cr = at_risk["merchant_portfolio_cr"].sum()
 
-    support = data[data["division"] == "Customer Support"]
+    support = latest_slice[latest_slice["division"] == "Customer Support"]
     support_sla = support["sla_adherence"].mean() if len(support) else np.nan
     support_backlog = int(support["backlog_tickets"].sum()) if len(support) else 0
 
-    uncovered = data[
-        (data["accounts_owned"] > 0) &
+    uncovered = latest_slice[
+        (latest_slice["accounts_owned"] > 0) &
         (
-            (data["exit_pipeline_flag"]) |
-            (~data["backup_covered"])
+            (latest_slice["exit_pipeline_flag"]) |
+            (~latest_slice["backup_covered"])
         )
     ]
     uncovered_accounts = int(uncovered["accounts_owned"].sum())
 
-    renewal_risk_cr = data.loc[
-        (data["renewal_due_90d_cr"] > 0) &
-        (~data["backup_covered"]),
+    renewal_risk_cr = latest_slice.loc[
+        (latest_slice["renewal_due_90d_cr"] > 0) &
+        (~latest_slice["backup_covered"]),
         "renewal_due_90d_cr"
     ].sum()
 
@@ -1039,21 +1049,23 @@ with tabs[0]:
     biz = business_metrics(filtered)
 
     st.markdown("### Customer & business impact")
-    b1, b2, b3, b4, b5, b6 = st.columns(6)
+    row1 = st.columns(3)
+    row2 = st.columns(3)
 
-    b1.metric(
+    row1[0].metric(
         "Portfolio at Risk",
         f"₹{biz['portfolio_risk_cr']:.1f} Cr",
-        help="Synthetic merchant portfolio value associated with elevated aggregate people-risk signals."
+        help="Synthetic merchant portfolio value associated with elevated aggregate people-risk signals in the latest month of the selected view."
     )
-    b2.metric(
+    row1[1].metric(
         "Support SLA",
         "N/A" if pd.isna(biz["support_sla"]) else f"{biz['support_sla']:.0f}%"
     )
-    b3.metric("Support Backlog", f"{biz['support_backlog']:,}")
-    b4.metric("Uncovered Accounts", f"{biz['uncovered_accounts']:,}")
-    b5.metric("90d Renewal Risk", f"₹{biz['renewal_risk_cr']:.1f} Cr")
-    b6.metric("Ramp to Output", f"{biz['median_ramp_days']:.0f} days")
+    row1[2].metric("Ticket Backlog", f"{biz['support_backlog']:,}")
+
+    row2[0].metric("Uncovered Accounts", f"{biz['uncovered_accounts']:,}")
+    row2[1].metric("Renewal Risk (90d)", f"₹{biz['renewal_risk_cr']:.1f} Cr")
+    row2[2].metric("Ramp to Output", f"{biz['median_ramp_days']:.0f} days")
 
     st.caption(
         "Business metrics are synthetic and shown only at aggregated cohort level. "
@@ -1732,7 +1744,8 @@ with tabs[3]:
             "Mentorship",
             "Personal or life-stage needs"
         ],
-        "Share": [68, 61, 55, 49, 43, 38, 33, 27, 19]
+        # Ordered to a clean 100% total.
+        "Share": [22, 18, 15, 11, 10, 9, 7, 5, 3]
     })
 
     fig = px.bar(
@@ -1748,7 +1761,7 @@ with tabs[3]:
         textposition="outside",
         cliponaxis=False
     )
-    fig.update_xaxes(range=[0, 80], ticksuffix="%")
+    fig.update_xaxes(range=[0, 25], ticksuffix="%")
     fig.update_yaxes(title=None)
     fig.update_layout(height=360, margin=dict(l=15, r=35, t=50, b=25))
     st.plotly_chart(fig, use_container_width=True)
@@ -1766,8 +1779,8 @@ with tabs[4]:
     manager_adjustments = {
         "Anuj":   {"1:1 Coverage": 7,  "Skip Levels": 5,  "Coaching": 8,  "Team Pulse": 6,  "Learning Score": 7},
         "Cassie": {"1:1 Coverage": 3,  "Skip Levels": 2,  "Coaching": 4,  "Team Pulse": 3,  "Learning Score": 2},
-        "Rafee":  {"1:1 Coverage": -7, "Skip Levels": -5, "Coaching": -6, "Team Pulse": -8, "Learning Score": -5},
-        "Priya":  {"1:1 Coverage": 6,  "Skip Levels": 4,  "Coaching": 9,  "Team Pulse": 7,  "Learning Score": 5},
+        "Rafee":  {"1:1 Coverage": 6,  "Skip Levels": 4,  "Coaching": 9,  "Team Pulse": 7,  "Learning Score": 5},
+        "Priya":  {"1:1 Coverage": -7, "Skip Levels": -5, "Coaching": -6, "Team Pulse": -8, "Learning Score": -5},
         "Zainab": {"1:1 Coverage": 0,  "Skip Levels": -1, "Coaching": 1,  "Team Pulse": 0,  "Learning Score": 1},
     }
 
