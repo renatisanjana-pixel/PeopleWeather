@@ -75,9 +75,9 @@ section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p{
     line-height:1.55;
 }
 section[data-testid="stSidebar"] h1{
-    font-size:1.45rem !important;
-    margin-top:.35rem !important;
-    margin-bottom:.35rem !important;
+    font-size:1.32rem !important;
+    margin-top:.25rem !important;
+    margin-bottom:.25rem !important;
 }
 section[data-testid="stSidebar"] label{
     color:#DCE4EE !important;
@@ -111,75 +111,78 @@ section[data-testid="stSidebar"] svg{
 .pp-topbar{
     background:#FFFFFF;
     border:1px solid var(--line);
-    border-radius:14px;
-    padding:14px 18px;
-    margin:0 0 10px 0;
+    border-radius:12px;
+    padding:10px 14px;
+    margin:0 0 8px 0;
     box-shadow:0 1px 3px rgba(20,37,61,.04);
     display:flex;
     align-items:center;
     justify-content:space-between;
-    gap:20px;
+    gap:14px;
 }
 .pp-brand{
     display:flex;
-    align-items:flex-start;
-    gap:12px;
+    align-items:center;
+    gap:10px;
 }
 .pp-mark{
-    width:34px;
-    height:34px;
-    border-radius:9px;
-    background:var(--navy);
-    color:white;
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    background:#EAF0FB;
+    color:var(--navy);
+    border:1px solid #D5DFEE;
     display:flex;
     align-items:center;
     justify-content:center;
-    font-weight:800;
-    letter-spacing:-1px;
-    margin-top:1px;
+    font-size:15px;
+    line-height:1;
+    margin-top:0;
+    flex:0 0 auto;
 }
 .pp-title{
-    font-size:1.55rem;
+    font-size:1.34rem;
     line-height:1.08;
-    font-weight:750;
+    font-weight:740;
     color:var(--ink);
     margin:0;
 }
 .pp-subtitle{
     color:var(--slate);
-    font-size:.92rem;
-    margin-top:4px;
+    font-size:.84rem;
+    line-height:1.4;
+    margin-top:2px;
 }
 .pp-period{
     flex:0 0 auto;
     border:1px solid #DDE4ED;
     border-radius:10px;
-    padding:8px 12px;
+    padding:7px 10px;
     background:#FBFCFE;
-    min-width:130px;
+    min-width:118px;
     text-align:left;
 }
 .pp-period b{
     display:block;
     color:var(--ink);
-    font-size:.9rem;
+    font-size:.84rem;
 }
 .pp-period span{
     color:var(--muted);
-    font-size:.78rem;
+    font-size:.72rem;
 }
 
 /* Privacy banner */
 .privacy{
     display:block;
-    padding:8px 12px;
+    padding:6px 10px;
     border:1px solid #DCE5F4;
     border-radius:9px;
     background:#EEF3FB;
     color:#334E76;
     font-weight:600;
-    font-size:12.5px;
-    margin:3px 0 10px 0;
+    font-size:11.6px;
+    margin:2px 0 8px 0;
 }
 
 /* Tabs */
@@ -190,8 +193,9 @@ div[data-baseweb="tab-list"]{
 button[data-baseweb="tab"]{
     color:#52627A !important;
     font-weight:600 !important;
-    padding-left:.2rem !important;
-    padding-right:.2rem !important;
+    font-size:.94rem !important;
+    padding-left:.15rem !important;
+    padding-right:.15rem !important;
 }
 button[data-baseweb="tab"][aria-selected="true"]{
     color:#243B78 !important;
@@ -205,6 +209,8 @@ h1,h2,h3,h4{
     color:var(--ink);
     letter-spacing:-.015em;
 }
+h2{font-size:1.55rem !important;}
+h3{font-size:1.25rem !important;}
 [data-testid="stHeadingWithActionElements"] h2,
 [data-testid="stHeadingWithActionElements"] h3{
     font-weight:700;
@@ -214,24 +220,24 @@ h1,h2,h3,h4{
 [data-testid="stMetric"]{
     background:#FFFFFF;
     border:1px solid #E1E7EF;
-    padding:14px 16px;
+    padding:10px 12px;
     border-radius:12px;
-    min-height:108px;
+    min-height:86px;
     box-shadow:0 1px 2px rgba(20,37,61,.035);
 }
 [data-testid="stMetricLabel"]{
-    font-size:.82rem;
+    font-size:.76rem;
     color:#56657A !important;
     font-weight:600;
 }
 [data-testid="stMetricValue"]{
-    font-size:1.85rem;
+    font-size:1.45rem;
     color:#17233C !important;
     font-weight:650;
     letter-spacing:-.02em;
 }
 [data-testid="stMetricDelta"]{
-    font-size:.78rem;
+    font-size:.72rem;
 }
 
 /* Dataframes */
@@ -243,22 +249,26 @@ h1,h2,h3,h4{
 
 /* AI insight cards */
 .ai-good{
-    padding:15px 17px;
+    padding:12px 14px;
     background:#F2F8F5;
     border:1px solid #DCECE4;
     border-left:4px solid #3B8C6E;
     border-radius:10px;
-    margin:9px 0;
+    margin:8px 0;
     color:#24364A;
+    font-size:.93rem;
+    line-height:1.55;
 }
 .ai-watch{
-    padding:15px 17px;
+    padding:12px 14px;
     background:#FBF7F2;
     border:1px solid #F0E4D5;
     border-left:4px solid #B77A31;
     border-radius:10px;
-    margin:9px 0;
+    margin:8px 0;
     color:#24364A;
+    font-size:.93rem;
+    line-height:1.55;
 }
 
 /* General captions / dividers */
@@ -276,7 +286,7 @@ button[kind="secondary"]{
 
 /* Compact spacing between blocks */
 [data-testid="stVerticalBlock"] > div{
-    gap:.45rem;
+    gap:.32rem;
 }
 
 /* Slightly smaller Plotly modebar */
@@ -1266,7 +1276,7 @@ st.markdown(
     f"""
     <div class="pp-topbar">
         <div class="pp-brand">
-            <div class="pp-mark">PP</div>
+            <div class="pp-mark">👤</div>
             <div>
                 <div class="pp-title">People Pulse</div>
                 <div class="pp-subtitle">
